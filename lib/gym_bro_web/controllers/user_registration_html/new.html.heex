@@ -1,0 +1,42 @@
+<div class="mx-auto max-w-sm">
+  <.header class="text-center">
+    Create your {String.capitalize(@selected_role)} account
+    <:subtitle>
+      <%= if @invited_email do %>
+        This trainer invite locks signup to <span class="font-semibold text-brand">Athlete</span>
+        mode for <span class="font-semibold text-brand"><%= @invited_email %></span>.
+      <% else %>
+        Joining as <span class="font-semibold text-brand">{String.capitalize(@selected_role)}</span>.
+        <.link navigate={~p"/join/role"} class="font-semibold text-brand hover:underline">
+          Change role
+        </.link>
+      <% end %>
+      <br /> Already registered?
+      <.link navigate={~p"/users/log_in"} class="font-semibold text-brand hover:underline">
+        Log in
+      </.link>
+      to your account now.
+    </:subtitle>
+  </.header>
+
+  <.simple_form :let={f} for={@changeset} action={~p"/users/register"}>
+    <.error :if={@changeset.action == :insert}>
+      Oops, something went wrong! Please check the errors below.
+    </.error>
+
+    <input type="hidden" name="user[role]" value={@selected_role} />
+    <.input
+      field={f[:email]}
+      type="email"
+      label="Email"
+      readonly={not is_nil(@invited_email)}
+      required
+      value={@invited_email || Phoenix.HTML.Form.input_value(f, :email)}
+    />
+    <.input field={f[:password]} type="password" label="Password" required />
+
+    <:actions>
+      <.button phx-disable-with="Creating account..." class="w-full">Create an account</.button>
+    </:actions>
+  </.simple_form>
+</div>

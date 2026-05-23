@@ -1,0 +1,47 @@
+<.flash_group flash={@flash} />
+<div class="py-12">
+  <div class="mx-auto max-w-2xl">
+    <p class="type-label">GymBro</p>
+    <h1 class="mt-3 type-display">
+      AI-built training, logged set by set.
+    </h1>
+    <p class="mt-4 max-w-[60ch] type-body text-text-muted">
+      Generate a 9-week program shaped by your goals, follow it day by day, and let your trainer follow along in real time.
+    </p>
+
+    <div class="mt-8 flex flex-wrap gap-3">
+      <.link href={~p"/join/role"} class="gb-btn gb-btn--primary gb-btn--lg">
+        Get started
+      </.link>
+      <.link href={~p"/users/log_in"} class="gb-btn gb-btn--secondary gb-btn--lg">
+        Log in
+      </.link>
+    </div>
+
+    <hr class="gb-divider mt-12" />
+
+    <dl class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+      <div>
+        <p class="type-label">Programs</p>
+        <p class="mt-2 type-h3">Built by AI</p>
+        <p class="mt-1 type-body-sm">
+          Goal, schedule, and equipment in, nine weeks of training out.
+        </p>
+      </div>
+      <div>
+        <p class="type-label">Logging</p>
+        <p class="mt-2 type-h3">Real-time</p>
+        <p class="mt-1 type-body-sm">
+          Track every set, rep, and rest from the workout screen.
+        </p>
+      </div>
+      <div>
+        <p class="type-label">Coaching</p>
+        <p class="mt-2 type-h3">Live view</p>
+        <p class="mt-1 type-body-sm">
+          Trainers can watch sessions land and message in the moment.
+        </p>
+      </div>
+    </dl>
+  </div>
+</div>

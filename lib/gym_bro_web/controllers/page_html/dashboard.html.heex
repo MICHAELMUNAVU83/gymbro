@@ -1,0 +1,228 @@
+<div class="gb-grid">
+  <div class="gb-grid__main space-y-6">
+    <header class="flex items-start justify-between gap-6">
+      <div>
+        <p class="type-label inline-flex items-center gap-2">
+          <span class="gb-label-dot" />Athlete home
+        </p>
+        <h1 class="mt-2 type-h1 gb-heading-accent">Ready for the next rep?</h1>
+        <p class="mt-3 type-body-sm">{@current_user.email}</p>
+      </div>
+      <div class="hidden gap-2 md:flex">
+        <.link navigate={~p"/settings"} class="gb-btn gb-btn--secondary gb-btn--sm">
+          <.icon name="hero-cog-6-tooth-mini" class="h-4 w-4" /> Settings
+        </.link>
+        <.link href={~p"/users/log_out"} method="delete" class="gb-btn gb-btn--ghost gb-btn--sm">
+          Log out
+        </.link>
+      </div>
+    </header>
+
+    <.stat_row>
+      <:item label="Goal" icon="hero-flag-mini">{pretty_goal(@profile && @profile.goal)}</:item>
+      <:item label="Weight" icon="hero-scale-mini">
+        {format_weight(@dashboard.current_weight)}
+      </:item>
+      <:item label="PRs" icon="hero-trophy-mini">{@dashboard.summary.personal_records}</:item>
+    </.stat_row>
+
+    <hr class="gb-divider" />
+
+    <section class="gb-card gb-card--accent">
+      <header class="flex items-end justify-between">
+        <div>
+          <.section_head icon="hero-fire-mini">Next workout</.section_head>
+          <h2 class="mt-2 type-h2">
+            {next_workout_heading(@dashboard.next_workout)}
+          </h2>
+          <p :if={@dashboard.next_workout} class="mt-1 type-body-sm">
+            {next_workout_focus(@dashboard.next_workout)}
+          </p>
+        </div>
+        <div :if={@dashboard.next_workout} class="text-right">
+          <p class="type-label inline-flex items-center gap-1.5">
+            <.icon name="hero-clock-mini" class="h-3.5 w-3.5 text-accent" /> Duration
+          </p>
+          <p class="mt-1 type-mono-stat">
+            {format_minutes(@dashboard.next_workout.estimated_duration_min)}
+          </p>
+        </div>
+      </header>
+
+      <div :if={@dashboard.next_workout} class="mt-4 space-y-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="gb-chip">
+            <.icon name="hero-calendar-mini" class="h-3 w-3" />
+            Week {@dashboard.next_workout.week_number} · Day {@dashboard.next_workout.day_number}
+          </span>
+          <span class="gb-chip">
+            <.icon name="hero-list-bullet-mini" class="h-3 w-3" />
+            {@dashboard.next_workout.exercise_count} exercises
+          </span>
+        </div>
+        <p class="type-body-sm">
+          {Enum.join(first_exercise_names(@dashboard.next_workout), " · ")}
+        </p>
+        <p :if={@dashboard.next_workout.trainer_notes} class="type-body-sm">
+          {@dashboard.next_workout.trainer_notes}
+        </p>
+      </div>
+
+      <div class="mt-5">
+        <.link navigate={~p"/workouts"} class="gb-btn gb-btn--primary gb-btn--lg">
+          <.icon name="hero-play-solid" class="h-4 w-4" /> Open workouts
+        </.link>
+      </div>
+    </section>
+
+    <hr class="gb-divider" />
+
+    <section>
+      <header class="flex items-end justify-between">
+        <div>
+          <.section_head icon="hero-chart-bar-mini">Bodyweight</.section_head>
+          <h2 class="mt-2 type-h2">
+            {format_weight(
+              @dashboard.summary.latest_weight_kg || (@profile && @profile.weight_kg)
+            )}
+          </h2>
+        </div>
+        <p class="type-body-sm">
+          {format_weight(@dashboard.bodyweight_chart.min_weight)} – {format_weight(
+            @dashboard.bodyweight_chart.max_weight
+          )}
+        </p>
+      </header>
+
+      <div class="mt-4">
+        <svg viewBox="0 0 320 140" class="h-40 w-full">
+          <line x1="16" y1="124" x2="304" y2="124" stroke="var(--border)" stroke-width="1" />
+          <polyline
+            points={@dashboard.bodyweight_chart.polyline_points}
+            fill="none"
+            stroke="var(--accent)"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            opacity={chart_line_opacity(@dashboard.bodyweight_chart.points)}
+          />
+          <circle
+            :for={point <- @dashboard.bodyweight_chart.points}
+            cx={point.x}
+            cy={point.y}
+            r="3"
+            fill="var(--accent)"
+          />
+          <text
+            :for={point <- @dashboard.bodyweight_chart.points}
+            x={point.x}
+            y="136"
+            text-anchor="middle"
+            fill="var(--text-subtle)"
+            class="text-[10px]"
+          >
+            {point.label}
+          </text>
+        </svg>
+      </div>
+    </section>
+  </div>
+
+  <aside class="gb-grid__side space-y-6 md:sticky md:top-6 md:self-start">
+    <div class="md:hidden">
+      <hr class="gb-divider" />
+    </div>
+
+    <section>
+      <.section_head icon="hero-bolt-mini">Macros</.section_head>
+      <p class="mt-2 type-h2">{@dashboard.macro_targets.calories} kcal</p>
+      <p class="mt-1 type-body-sm">
+        daily for {@dashboard.macro_targets.goal_label}
+      </p>
+
+      <div class="mt-4 grid grid-cols-3 gap-4 border-t border-border pt-4">
+        <div>
+          <p class="type-label">Protein</p>
+          <p class="mt-1 type-mono-stat">{@dashboard.macro_targets.protein_g}g</p>
+        </div>
+        <div>
+          <p class="type-label">Carbs</p>
+          <p class="mt-1 type-mono-stat">{@dashboard.macro_targets.carbs_g}g</p>
+        </div>
+        <div>
+          <p class="type-label">Fat</p>
+          <p class="mt-1 type-mono-stat">{@dashboard.macro_targets.fat_g}g</p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="gb-divider" />
+
+    <section>
+      <.section_head icon="hero-sparkles-mini">Consistency</.section_head>
+      <div class="mt-4 flex items-center gap-4">
+        <div class="relative h-20 w-20">
+          <svg viewBox="0 0 100 100" class="h-20 w-20 -rotate-90">
+            <circle cx="50" cy="50" r="40" fill="none" stroke="var(--border)" stroke-width="8" />
+            <circle
+              cx="50"
+              cy="50"
+              r="40"
+              fill="none"
+              stroke="var(--accent)"
+              stroke-width="8"
+              stroke-dasharray={"#{@dashboard.consistency.percent * 2.51} 251"}
+              stroke-linecap="round"
+            />
+          </svg>
+          <div class="absolute inset-0 grid place-items-center">
+            <span class="type-mono-stat">{@dashboard.consistency.percent}%</span>
+          </div>
+        </div>
+        <p class="type-body-sm">
+          {consistency_caption(@dashboard.consistency)}
+        </p>
+      </div>
+    </section>
+
+    <hr class="gb-divider" />
+
+    <section>
+      <header class="flex items-end justify-between">
+        <div>
+          <.section_head icon="hero-calendar-days-mini">Workout calendar</.section_head>
+          <p class="mt-2 type-h2">
+            {@dashboard.workout_streak.current_days} day streak
+          </p>
+        </div>
+        <p class="type-body-sm">{@dashboard.workout_calendar.month_label}</p>
+      </header>
+
+      <p class="mt-2 type-body-sm">
+        {streak_caption(@dashboard.workout_streak)}
+      </p>
+
+      <div class="mt-4 grid grid-cols-7 gap-2">
+        <div
+          :for={day <- @dashboard.workout_calendar.days}
+          class={[
+            "grid aspect-square place-items-center rounded-xl border text-xs font-semibold",
+            day.worked_out && "border-accent bg-accent text-white",
+            day.is_today && !day.worked_out && "border-accent text-accent",
+            !day.worked_out && !day.is_today && "border-border text-text-subtle"
+          ]}
+          title={Calendar.strftime(day.date, "%b %-d, %Y")}
+        >
+          {day.day_number}
+        </div>
+      </div>
+
+      <p class="mt-4 type-body-sm">
+        {@dashboard.workout_calendar.completed_days} workout day#{if @dashboard.workout_calendar.completed_days ==
+                                                                       1,
+                                                                     do: "",
+                                                                     else: "s"} marked in the last 35 days.
+      </p>
+    </section>
+  </aside>
+</div>

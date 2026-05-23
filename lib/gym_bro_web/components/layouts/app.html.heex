@@ -1,0 +1,62 @@
+<div class="relative min-h-dvh">
+  <div class={[
+    "app-shell",
+    @current_user && @current_user.role == "athlete" && "app-shell--with-nav"
+  ]}>
+    <header :if={is_nil(@current_user)} class="safe-top flex items-center justify-between py-4">
+      <div>
+        <p class="type-label">GymBro</p>
+        <p class="mt-1 type-body-sm">AI-powered workout tracking</p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <.link href={~p"/join/role"} class="gb-btn gb-btn--secondary gb-btn--sm">
+          Register
+        </.link>
+        <.link href={~p"/users/log_in"} class="gb-btn gb-btn--primary gb-btn--sm">
+          Log in
+        </.link>
+      </div>
+    </header>
+
+    <main class={["app-screen", "py-6"]}>
+      <.flash_group flash={@flash} />
+      {@inner_content}
+    </main>
+  </div>
+
+  <nav
+    :if={@current_user && @current_user.role == "athlete"}
+    class="gb-tabbar"
+    aria-label="Athlete"
+  >
+    <div class="gb-tabbar__inner">
+      <%= for item <- athlete_nav_items() do %>
+        <.link
+          :if={item.action == :navigate}
+          navigate={item.path}
+          class={nav_item_class(:athlete, item.key, assigns[:active_nav])}
+        >
+          <.icon
+            name={item.icon}
+            class={nav_icon_class(:athlete, item.key, assigns[:active_nav])}
+          />
+          <span class="truncate">{item.label}</span>
+        </.link>
+
+        <.link
+          :if={item.action == :href}
+          href={item.path}
+          method={Map.get(item, :method)}
+          class={nav_item_class(:athlete, item.key, assigns[:active_nav])}
+        >
+          <.icon
+            name={item.icon}
+            class={nav_icon_class(:athlete, item.key, assigns[:active_nav])}
+          />
+          <span class="truncate">{item.label}</span>
+        </.link>
+      <% end %>
+    </div>
+  </nav>
+</div>

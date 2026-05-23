@@ -1,0 +1,39 @@
+<div class="relative min-h-dvh">
+  <div class="app-shell app-shell--with-nav">
+    <main class="app-screen py-6">
+      <.flash_group flash={@flash} />
+      {@inner_content}
+    </main>
+  </div>
+
+  <nav class="gb-tabbar" aria-label="Trainer">
+    <div class="gb-tabbar__inner">
+      <%= for item <- trainer_nav_items() do %>
+        <.link
+          :if={item.action == :navigate}
+          navigate={item.path}
+          class={nav_item_class(:trainer, item.key, assigns[:active_nav])}
+        >
+          <.icon
+            name={item.icon}
+            class={nav_icon_class(:trainer, item.key, assigns[:active_nav])}
+          />
+          <span class="truncate">{item.label}</span>
+        </.link>
+
+        <.link
+          :if={item.action == :href}
+          href={item.path}
+          method={Map.get(item, :method)}
+          class={nav_item_class(:trainer, item.key, assigns[:active_nav])}
+        >
+          <.icon
+            name={item.icon}
+            class={nav_icon_class(:trainer, item.key, assigns[:active_nav])}
+          />
+          <span class="truncate">{item.label}</span>
+        </.link>
+      <% end %>
+    </div>
+  </nav>
+</div>
