@@ -37,7 +37,8 @@ defmodule GymBro.EnvTest do
   end
 
   test "load_file/1 ignores missing files" do
-    missing_path = Path.join(System.tmp_dir!(), "gym_bro_missing_#{System.unique_integer([:positive])}.env")
+    missing_path =
+      Path.join(System.tmp_dir!(), "gym_bro_missing_#{System.unique_integer([:positive])}.env")
 
     assert :ok = Env.load_file(missing_path)
   end
