@@ -543,54 +543,6 @@ defmodule GymBroWeb.HomeComponents do
     ]
   end
 
-  defp hero_stats do
-    [
-      %{
-        label: "Athletes",
-        value: "Free start",
-        detail: "Join free, onboard fast, train with structure."
-      },
-      %{
-        label: "Trainers",
-        value: "Client view",
-        detail: "Monitor progress, adjust plans, stay connected."
-      },
-      %{
-        label: "Plans",
-        value: "AI built",
-        detail: "Structured blocks generated from goals and preferences."
-      }
-    ]
-  end
-
-  defp hero_bullets do
-    [
-      %{
-        icon: "hero-cpu-chip",
-        title: "AI program builder",
-        detail: "Generate a practical training block from body stats, goals, and equipment."
-      },
-      %{
-        icon: "hero-bolt",
-        title: "Live workout logging",
-        detail: "Track sets, reps, weight, and rest time during every session."
-      },
-      %{
-        icon: "hero-chart-bar",
-        title: "Progress tracking",
-        detail: "Review weight trends, photos, and training consistency in one place."
-      }
-    ]
-  end
-
-  defp hero_roles do
-    [
-      %{initials: "AI", label: "Planner", class: "bg-accent text-white"},
-      %{initials: "AT", label: "Athlete", class: "bg-surface text-text border border-border"},
-      %{initials: "TR", label: "Trainer", class: "bg-surface-alt text-text"}
-    ]
-  end
-
   defp how_steps do
     [
       %{
