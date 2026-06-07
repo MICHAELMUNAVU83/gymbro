@@ -2,6 +2,15 @@
 
 GymBro is a Phoenix + LiveView fitness coaching platform for athletes and trainers.
 
+
+<img width="1440" height="814" alt="Screenshot 2026-06-07 at 15 32 36" src="https://github.com/user-attachments/assets/d0e60703-8fd4-4b74-bcd9-94aa8a45e326" /><img width="1440" height="814" alt="Screenshot 2026-06-07 at 15 33 27" src="https://github.com/user-attachments/assets/7b2458e4-4017-4a25-976e-6c9d54c5b858" />
+
+<img width="1440" height="814" alt="Screenshot 2026-06-07 at 15 33 34" src="https://github.com/user-attachments/assets/306610a6-889b-4f51-9f97-5614318e2493" />
+
+<img width="1440" height="814" alt="Screenshot 2026-06-07 at 15 19 28" src="https://github.com/user-attachments/assets/59e41bbf-6393-4c67-b98a-e7c81f48455b" />
+<img width="1440" height="814" alt="Screenshot 2026-06-07 at 15 12 09" src="https://github.com/user-attachments/assets/d8bc348b-c403-4f91-9c83-ab27de79c1c0" />
+
+
 Athletes use GymBro to get an AI-generated workout plan, log sessions, and track progress. Trainers use it to invite clients, monitor activity, adjust programs, and review analytics from one dashboard.
 
 ## How the app works
