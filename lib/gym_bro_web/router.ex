@@ -20,7 +20,9 @@ defmodule GymBroWeb.Router do
   scope "/", GymBroWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live_session :public, on_mount: [{GymBroWeb.UserAuth, :mount_current_user}] do
+      live "/", HomeLive, :index
+    end
   end
 
   # Other scopes may use custom stacks.

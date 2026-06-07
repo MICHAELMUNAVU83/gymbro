@@ -6,7 +6,7 @@ defmodule GymBroWeb.PageControllerTest do
 
   test "GET /", %{conn: conn} do
     conn = get(conn, ~p"/")
-    assert html_response(conn, 200) =~ "AI-built training, logged set by set."
+    assert html_response(conn, 200) =~ "Free AI Workout Plans Built Around Your Goal"
   end
 
   test "GET / redirects incomplete athletes into onboarding", %{conn: conn} do

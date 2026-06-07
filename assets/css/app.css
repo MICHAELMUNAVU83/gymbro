@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Lexend+Deca:wght@400;500;600&display=swap");
 @import "tailwindcss/base";
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
@@ -626,6 +627,91 @@
   .gb-link--accent:hover {
     color: var(--accent-hover);
   }
+
+  /* Marketing home */
+  .home-page {
+    font-family: "Lexend Deca", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  .home-shell {
+    width: min(100%, 1290px);
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 3vw, 2rem);
+  }
+
+  .home-font-display {
+    font-family: "Bebas Neue", Impact, sans-serif;
+  }
+
+  .home-eyebrow {
+    font-size: 0.9rem;
+    line-height: 1.2;
+    font-weight: 500;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: #8d6a6e;
+  }
+
+  .home-title-hero,
+  .home-title-lg,
+  .home-title-md,
+  .home-title-sm {
+    font-family: "Bebas Neue", Impact, sans-serif;
+    text-transform: uppercase;
+    color: #1a1a1a;
+  }
+
+  .home-title-hero {
+    font-size: clamp(3.4rem, 9vw, 6rem);
+    line-height: 0.95;
+    letter-spacing: 0.04em;
+  }
+
+  .home-title-lg {
+    font-size: clamp(2.2rem, 5vw, 4.4rem);
+    line-height: 0.98;
+    letter-spacing: 0.04em;
+  }
+
+  .home-title-md {
+    font-size: clamp(1.8rem, 3vw, 2.8rem);
+    line-height: 1.05;
+    letter-spacing: 0.04em;
+  }
+
+  .home-title-sm {
+    font-size: clamp(1.45rem, 2vw, 2rem);
+    line-height: 1.08;
+    letter-spacing: 0.04em;
+  }
+
+  .home-copy {
+    font-size: 0.95rem;
+    line-height: 1.9;
+    color: #5f6268;
+  }
+
+  .home-glass {
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(31px);
+    -webkit-backdrop-filter: blur(31px);
+  }
+
+  .home-card-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(127, 16, 22, 0) 0%,
+      rgba(127, 16, 22, 0.22) 42%,
+      rgba(87, 8, 13, 0.82) 100%
+    );
+  }
+
+  .home-footer-stroke {
+    color: transparent;
+    -webkit-text-stroke: 1.6px rgba(255, 255, 255, 0.55);
+  }
 }
 
 @keyframes gym-screen-enter {
@@ -649,6 +735,16 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
   }
 }
 
