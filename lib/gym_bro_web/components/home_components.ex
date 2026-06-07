@@ -30,26 +30,8 @@ defmodule GymBroWeb.HomeComponents do
   def home_header(assigns) do
     ~H"""
     <header class="sticky top-0 z-50 border-b bg-white border-border bg-bg/95 backdrop-blur">
-      <nav class="mx-auto flex max-w-[1290px] items-center justify-between px-5 py-5">
-        <.link href={~p"/"} class="flex items-center gap-3" aria-label="GymBro home">
-          <span class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-accent/20 bg-accent-soft text-accent">
-            <svg
-              class="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M6.5 9v6M9 7.5v9M15 7.5v9M17.5 9v6M9 12h6" />
-            </svg>
-          </span>
-          <span class="text-xl font-extrabold uppercase tracking-tight text-text">
-            Gym<span class="text-accent">Bro</span>
-          </span>
-        </.link>
+      <nav class="mx-auto flex max-w-[1290px] items-center justify-between px-5 py-4 lg:py-5">
+        <.brand_logo href={~p"/"} class="block   h-[20px] w-[70px]" />
 
         <div class="hidden items-center gap-8 lg:flex">
           <%= for item <- nav_links() do %>
@@ -82,10 +64,10 @@ defmodule GymBroWeb.HomeComponents do
           phx-click="toggle_mobile_menu"
           aria-expanded={to_string(@mobile_menu_open)}
           aria-controls="home-mobile-menu"
-          class="inline-flex items-center justify-center rounded-pill border border-border bg-surface p-3 text-text lg:hidden"
+          class="inline-flex items-center justify-center rounded-pill border border-border bg-surface p-2.5 text-text transition hover:bg-surface-alt lg:hidden"
         >
           <span class="sr-only">Toggle navigation</span>
-          <.icon name="hero-bars-3" class="h-5 w-5" />
+          <.icon name={if @mobile_menu_open, do: "hero-x-mark", else: "hero-bars-3"} class="h-5 w-5" />
         </button>
       </nav>
 
@@ -94,11 +76,12 @@ defmodule GymBroWeb.HomeComponents do
         id="home-mobile-menu"
         class="border-t border-border bg-surface lg:hidden"
       >
-        <div class="mx-auto max-w-[1290px] px-5 py-4">
+        <div phx-click-away="close_mobile_menu" class="mx-auto max-w-[1290px] px-5 py-4">
           <div class="flex flex-col gap-2">
             <%= for item <- nav_links() do %>
               <a
                 href={item.href}
+                phx-click="close_mobile_menu"
                 class="rounded-lg px-2 py-2 text-base font-medium text-text hover:bg-surface-alt"
               >
                 {item.label}
@@ -108,12 +91,14 @@ defmodule GymBroWeb.HomeComponents do
             <div class="mt-3 flex flex-col gap-2">
               <.link
                 href={~p"/join/role"}
+                phx-click="close_mobile_menu"
                 class="inline-flex items-center justify-center rounded-pill bg-accent px-5 py-3 font-medium text-white transition hover:bg-accent-hover"
               >
                 Get started
               </.link>
               <.link
                 href={~p"/users/log_in"}
+                phx-click="close_mobile_menu"
                 class="inline-flex items-center justify-center rounded-pill border border-border bg-surface px-5 py-3 font-medium text-text transition hover:bg-surface-alt"
               >
                 Log in
@@ -128,7 +113,19 @@ defmodule GymBroWeb.HomeComponents do
 
   def hero_section(assigns) do
     ~H"""
-    <section class="relative h-[100vh] overflow-hidden border-b border-border bg-surface">
+    <section class="relative min-h-screen overflow-hidden border-b border-border bg-surface lg:h-[100vh]">
+      <div class="absolute inset-0 lg:hidden">
+        <img
+          src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1400&q=80"
+          alt=""
+          aria-hidden="true"
+          class="absolute inset-y-0 right-[-18%] h-full w-[88%] object-cover object-[68%_center] opacity-95"
+        />
+        <div class="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.99)_0%,rgba(255,255,255,0.98)_28%,rgba(255,255,255,0.94)_46%,rgba(255,255,255,0.76)_64%,rgba(255,255,255,0.36)_82%,rgba(255,255,255,0.08)_100%)]">
+        </div>
+        <div class="absolute inset-0 bg-gradient-to-b from-surface/18 via-transparent to-surface/70"></div>
+      </div>
+
       <div class="absolute inset-y-0 right-0 hidden w-1/2 lg:block">
         <img
           src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1400&q=80"
@@ -139,8 +136,8 @@ defmodule GymBroWeb.HomeComponents do
         </div>
       </div>
 
-      <div class="relative mx-auto grid max-w-[1290px] gap-14 px-5 py-16 lg:grid-cols-[minmax(0,1fr)_360px] lg:py-24">
-        <div class="max-w-[720px]">
+      <div class="relative mx-auto grid max-w-[1290px] gap-14 px-5 py-16 sm:py-20 lg:grid-cols-[minmax(0,1fr)_360px] lg:py-24">
+        <div class="max-w-[23rem] sm:max-w-[34rem] lg:max-w-[720px]">
           <p
             class="text-[3.6rem] font-black uppercase leading-none sm:text-[5.5rem] lg:text-[6.5rem]"
             style="color: transparent; -webkit-text-stroke: 2px var(--accent);"
@@ -442,25 +439,7 @@ defmodule GymBroWeb.HomeComponents do
 
         <div class="mt-16 grid gap-12 md:grid-cols-2 lg:grid-cols-4">
           <div class="flex flex-col gap-6">
-            <.link href={~p"/"} class="flex items-center gap-3">
-              <span class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-accent/20 bg-accent-soft text-accent">
-                <svg
-                  class="h-5 w-5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M6.5 9v6M9 7.5v9M15 7.5v9M17.5 9v6M9 12h6" />
-                </svg>
-              </span>
-              <span class="text-xl font-extrabold uppercase text-text">
-                Gym<span class="text-accent">Bro</span>
-              </span>
-            </.link>
+            <.brand_logo href={~p"/"} class="block w-[180px]" img_class="h-auto w-full" />
 
             <div class="space-y-3 text-base leading-7 text-text-muted">
               <p>123 Training Way, Suite 400, Austin, Texas 78701</p>
@@ -532,6 +511,23 @@ defmodule GymBroWeb.HomeComponents do
           <a href="#footer" class="transition hover:text-accent">Privacy Policy</a>
           <span class="text-border-strong">|</span>
           <a href="#footer" class="transition hover:text-accent">Terms of Service</a>
+        </div>
+        <div class="mx-auto max-w-[1290px] px-5 pb-8 text-sm text-text-muted">
+          Built by
+          <a
+            href="https://michaelmunavu.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="font-medium text-text transition hover:text-accent"
+          >
+            Michael Munavu
+          </a>
+          (<a
+            href="https://michaelmunavu.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="transition hover:text-accent"
+          >michaelmunavu.com</a>)
         </div>
       </div>
     </footer>
@@ -737,5 +733,4 @@ defmodule GymBroWeb.HomeComponents do
       }
     ]
   end
-
 end

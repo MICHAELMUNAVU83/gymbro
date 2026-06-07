@@ -100,6 +100,16 @@ defmodule GymBroWeb.Router do
       live "/trainer/clients", Trainer.ClientListLive, :index
       live "/trainer/clients/invite", Trainer.ClientInviteLive, :index
       live "/trainer/clients/:client_id", Trainer.ClientDetailLive, :show
+      live "/trainer/clients/:client_id/regenerate", Trainer.ClientRegenerateLive, :edit
+      live "/trainer/clients/:client_id/days/:day_id", Trainer.ClientWorkoutDayLive, :show
+
+      live "/trainer/clients/:client_id/days/:day_id/exercises/new",
+           Trainer.ClientExerciseFormLive,
+           :new
+
+      live "/trainer/clients/:client_id/days/:day_id/exercises/:exercise_id/edit",
+           Trainer.ClientExerciseFormLive,
+           :edit
     end
 
     live_session :athlete_authenticated,

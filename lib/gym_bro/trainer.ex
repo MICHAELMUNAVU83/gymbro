@@ -11,10 +11,13 @@ defmodule GymBro.Trainer do
   alias GymBro.Accounts.User
   alias GymBro.BodyStats
   alias GymBro.BodyStats.CheckinImage
+  alias GymBro.Profiles
   alias GymBro.Programs
   alias GymBro.Programs.{Exercise, Program, WorkoutDay}
   alias GymBro.Profiles.UserProfile
   alias GymBro.Trainer.TrainerClient
+  alias GymBro.Training
+  alias GymBro.Training.WorkoutSession
 
   @client_invitation_lifetime_seconds 48 * 60 * 60
   @exercise_fields ~w(
@@ -114,6 +117,28 @@ defmodule GymBro.Trainer do
     Repo.get_by(TrainerClient, trainer_id: trainer_id, client_id: client_id)
   end
 
+  def get_or_start_client_workout_session(trainer_id, client_id, workout_day_id) do
+    with :ok <- verify_client_access(trainer_id, client_id),
+         {:ok, workout_day} <- fetch_client_workout_day(client_id, workout_day_id) do
+      Training.get_or_start_workout_session(client_id, workout_day.id)
+    end
+  end
+
+  def log_client_exercise_set(trainer_id, client_id, session_id, exercise_id, attrs \\ %{}) do
+    with :ok <- verify_client_access(trainer_id, client_id),
+         {:ok, session} <- fetch_client_workout_session(client_id, session_id),
+         {:ok, exercise} <- fetch_client_exercise(client_id, exercise_id) do
+      Training.log_exercise_set(session, exercise, attrs)
+    end
+  end
+
+  def complete_client_workout_session(trainer_id, client_id, session_id) do
+    with :ok <- verify_client_access(trainer_id, client_id),
+         {:ok, session} <- fetch_client_workout_session(client_id, session_id) do
+      Training.complete_workout_session(session)
+    end
+  end
+
   def add_exercise_to_client_day(trainer_id, client_id, workout_day_id, attrs) do
     with :ok <- verify_client_access(trainer_id, client_id),
          {:ok, workout_day} <- fetch_client_workout_day(client_id, workout_day_id) do
@@ -147,6 +172,46 @@ defmodule GymBro.Trainer do
          {:ok, _exercise} <- Programs.delete_exercise(exercise) do
       Programs.resequence_exercises(exercise.workout_day_id)
       :ok
+    end
+  end
+
+  @doc """
+  Returns the client's profile changeset for trainer-facing config forms.
+  """
+  def change_client_profile(%UserProfile{} = profile, attrs \\ %{}) do
+    Profiles.change_user_profile(profile, attrs)
+  end
+
+  @doc """
+  Updates a managed client's profile (weight, goals, schedule, etc.) after
+  verifying the trainer has access to the client.
+  """
+  def update_client_profile(trainer_id, client_id, attrs) do
+    with :ok <- verify_client_access(trainer_id, client_id),
+         %UserProfile{} = profile <- Profiles.get_user_profile_by_user(client_id) do
+      Profiles.update_user_profile(profile, attrs)
+    else
+      {:error, reason} -> {:error, reason}
+      nil -> {:error, :missing_profile}
+    end
+  end
+
+  @doc """
+  Saves the client's profile and regenerates their AI program in one step.
+  """
+  def reconfigure_and_regenerate_client_program(
+        trainer_id,
+        client_id,
+        profile_attrs,
+        trainer_notes \\ nil
+      ) do
+    with {:ok, profile} <- update_client_profile(trainer_id, client_id, profile_attrs) do
+      overrides = %{block_weeks: profile.preferred_block_weeks}
+
+      case regenerate_client_program(trainer_id, client_id, trainer_notes, overrides) do
+        {:ok, program} -> {:ok, program}
+        {:error, reason} -> {:error, reason}
+      end
     end
   end
 
@@ -667,6 +732,13 @@ defmodule GymBro.Trainer do
          ) do
       nil -> {:error, :not_found}
       %Exercise{} = exercise -> {:ok, exercise}
+    end
+  end
+
+  defp fetch_client_workout_session(client_id, session_id) do
+    case Repo.get_by(WorkoutSession, id: session_id, user_id: client_id) do
+      nil -> {:error, :not_found}
+      %WorkoutSession{} = session -> {:ok, session}
     end
   end
 

@@ -11,7 +11,25 @@ defmodule GymBroWeb.HomeLive do
         {:ok,
          socket
          |> assign(:mobile_menu_open, false)
-         |> assign(:page_title, "Free AI Workout Plans"), layout: false}
+         |> assign(:page_title, "Free AI Workout Plans")
+         |> assign(
+           :page_description,
+           "GymBro helps athletes and trainers create AI-powered workout plans, log every session, and track progress in one coaching platform."
+         )
+         |> assign(:page_robots, "index,follow")
+         |> assign(:canonical_url, "#{GymBroWeb.Endpoint.url()}/")
+         |> assign(:page_image_url, "#{GymBroWeb.Endpoint.url()}#{~p"/images/logobg.png"}")
+         |> assign(
+           :structured_data,
+           %{
+             "@context" => "https://schema.org",
+             "@type" => "WebSite",
+             "name" => "GymBro",
+             "url" => "#{GymBroWeb.Endpoint.url()}/",
+             "description" =>
+               "GymBro helps athletes and trainers create AI-powered workout plans, log every session, and track progress in one coaching platform."
+           }
+         ), layout: false}
 
       %{role: "athlete"} = current_user ->
         case Onboarding.next_path(current_user) do
@@ -30,6 +48,11 @@ defmodule GymBroWeb.HomeLive do
   @impl true
   def handle_event("toggle_mobile_menu", _params, socket) do
     {:noreply, update(socket, :mobile_menu_open, &(!&1))}
+  end
+
+  @impl true
+  def handle_event("close_mobile_menu", _params, socket) do
+    {:noreply, assign(socket, :mobile_menu_open, false)}
   end
 
   @impl true

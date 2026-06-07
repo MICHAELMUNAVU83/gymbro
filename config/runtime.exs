@@ -3,42 +3,7 @@ import Config
 if config_env() != :prod do
   env_file = Path.expand("../.env", __DIR__)
 
-  if File.exists?(env_file) do
-    env_file
-    |> File.stream!([], :line)
-    |> Enum.each(fn line ->
-      line = String.trim(line)
-
-      if line != "" and not String.starts_with?(line, "#") do
-        line = String.trim_leading(line, "export ")
-
-        case String.split(line, "=", parts: 2) do
-          [key, value] ->
-            key = String.trim(key)
-
-            value =
-              value
-              |> String.trim()
-              |> then(fn trimmed ->
-                if byte_size(trimmed) >= 2 and
-                     ((String.starts_with?(trimmed, "\"") and String.ends_with?(trimmed, "\"")) or
-                        (String.starts_with?(trimmed, "'") and String.ends_with?(trimmed, "'"))) do
-                  String.slice(trimmed, 1, byte_size(trimmed) - 2)
-                else
-                  trimmed
-                end
-              end)
-
-            if key != "" and is_nil(System.get_env(key)) do
-              System.put_env(key, value)
-            end
-
-          _ ->
-            :ok
-        end
-      end
-    end)
-  end
+  GymBro.Env.load_file(env_file)
 end
 
 # config/runtime.exs is executed for all environments, including

@@ -162,6 +162,30 @@ defmodule GymBroWeb.CoreComponents do
   end
 
   @doc """
+  Renders the shared GymBro logo image, optionally as a link.
+  """
+  attr :href, :string, default: nil
+  attr :class, :string, default: nil
+  attr :img_class, :string, default: "h-auto w-full"
+  attr :alt, :string, default: "GymBro"
+
+  def brand_logo(%{href: href} = assigns) when is_binary(href) do
+    ~H"""
+    <.link href={@href} class={@class} aria-label="GymBro home">
+      <img src="/images/logo.png" alt={@alt} class={@img_class} />
+    </.link>
+    """
+  end
+
+  def brand_logo(assigns) do
+    ~H"""
+    <div class={@class}>
+      <img src="/images/logo.png" alt={@alt} class={@img_class} />
+    </div>
+    """
+  end
+
+  @doc """
   Section heading with a red leading bar and optional icon.
 
   ## Example

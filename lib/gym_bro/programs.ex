@@ -108,39 +108,63 @@ defmodule GymBro.Programs do
 
       program ->
         program = Repo.preload(program, workout_days: [:exercises])
-
-        completed_workout_day_ids =
-          Repo.all(
-            from session in WorkoutSession,
-              join: workout_day in WorkoutDay,
-              on: workout_day.id == session.workout_day_id,
-              where:
-                session.user_id == ^user_id and
-                  session.status == "completed" and
-                  workout_day.program_id == ^program.id,
-              select: session.workout_day_id,
-              distinct: true
-          )
-          |> MapSet.new()
-
-        ordered_workout_days =
-          program.workout_days
-          |> Enum.reject(& &1.is_rest_day)
-          |> Enum.sort_by(&{&1.week_number, &1.day_number})
-
-        current_or_future_day =
-          Enum.find(ordered_workout_days, fn workout_day ->
-            workout_day.week_number >= program.current_week and
-              not MapSet.member?(completed_workout_day_ids, workout_day.id)
-          end)
-
-        fallback_day =
-          Enum.find(ordered_workout_days, fn workout_day ->
-            not MapSet.member?(completed_workout_day_ids, workout_day.id)
-          end) || List.first(ordered_workout_days)
-
-        build_next_workout(program, current_or_future_day || fallback_day)
+        build_next_workout(program, next_workout_day(program, user_id))
     end
+  end
+
+  @doc """
+  Returns the id of the workout day the athlete should train next, or `nil`.
+
+  Reuses the same ordering rules as `get_next_workout_for_user/1` so trainer
+  views and athlete views agree on what's up next.
+  """
+  def next_workout_day_id_for_user(user_id) do
+    case get_active_program_for_user(user_id) do
+      nil ->
+        nil
+
+      program ->
+        program = Repo.preload(program, :workout_days)
+
+        case next_workout_day(program, user_id) do
+          nil -> nil
+          workout_day -> workout_day.id
+        end
+    end
+  end
+
+  defp next_workout_day(program, user_id) do
+    completed_workout_day_ids =
+      Repo.all(
+        from session in WorkoutSession,
+          join: workout_day in WorkoutDay,
+          on: workout_day.id == session.workout_day_id,
+          where:
+            session.user_id == ^user_id and
+              session.status == "completed" and
+              workout_day.program_id == ^program.id,
+          select: session.workout_day_id,
+          distinct: true
+      )
+      |> MapSet.new()
+
+    ordered_workout_days =
+      program.workout_days
+      |> Enum.reject(& &1.is_rest_day)
+      |> Enum.sort_by(&{&1.week_number, &1.day_number})
+
+    current_or_future_day =
+      Enum.find(ordered_workout_days, fn workout_day ->
+        workout_day.week_number >= program.current_week and
+          not MapSet.member?(completed_workout_day_ids, workout_day.id)
+      end)
+
+    fallback_day =
+      Enum.find(ordered_workout_days, fn workout_day ->
+        not MapSet.member?(completed_workout_day_ids, workout_day.id)
+      end) || List.first(ordered_workout_days)
+
+    current_or_future_day || fallback_day
   end
 
   @doc """

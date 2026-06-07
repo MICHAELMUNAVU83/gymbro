@@ -12,6 +12,8 @@ defmodule GymBro.Application do
       GymBro.Repo,
       {DNSCluster, query: Application.get_env(:gym_bro, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: GymBro.PubSub},
+      {Registry, keys: :unique, name: GymBro.WorkoutClockRegistry},
+      {DynamicSupervisor, strategy: :one_for_one, name: GymBro.WorkoutClockSupervisor},
       # Start the Finch HTTP client for sending emails
       {Finch, name: GymBro.Finch},
       # Start a worker by calling: GymBro.Worker.start_link(arg)

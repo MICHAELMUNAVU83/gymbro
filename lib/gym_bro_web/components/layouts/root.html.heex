@@ -5,11 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="csrf-token" content={get_csrf_token()} />
     <meta name="theme-color" content="#FAFAF7" />
+    <meta name="description" content={meta_description(assigns)} />
+    <meta name="robots" content={page_robots(assigns)} />
+    <meta name="application-name" content="GymBro" />
+    <meta name="apple-mobile-web-app-title" content="GymBro" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="canonical" href={page_url(assigns)} />
     <.live_title default="GymBro" suffix=" · GymBro">
       {assigns[:page_title]}
     </.live_title>
+    <meta property="og:site_name" content="GymBro" />
+    <meta property="og:title" content={meta_title(assigns)} />
+    <meta property="og:description" content={meta_description(assigns)} />
+    <meta property="og:type" content={page_type(assigns)} />
+    <meta property="og:url" content={page_url(assigns)} />
+    <meta property="og:image" content={page_image(assigns)} />
+    <meta property="og:image:alt" content={page_image_alt(assigns)} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={meta_title(assigns)} />
+    <meta name="twitter:description" content={meta_description(assigns)} />
+    <meta name="twitter:image" content={page_image(assigns)} />
+    <link rel="icon" type="image/png" href={~p"/images/logobg.png"} />
+    <link rel="apple-touch-icon" href={~p"/images/logobg.png"} />
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
+    </script>
+    <script :if={structured_data(assigns)} type="application/ld+json">
+      {raw(structured_data(assigns))}
+    </script>
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XCY965WHKW">
+    </script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-XCY965WHKW');
     </script>
   </head>
   <body class="min-h-dvh bg-bg text-text antialiased">

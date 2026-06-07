@@ -7,7 +7,7 @@ defmodule GymBro.Training do
   alias GymBro.Repo
 
   alias GymBro.Programs.{Exercise, WorkoutDay}
-  alias GymBro.Training.{ExerciseLog, WorkoutSession}
+  alias GymBro.Training.{ExerciseLog, WorkoutClock, WorkoutSession}
 
   @progression_increment_kg 2.5
 
@@ -130,6 +130,8 @@ defmodule GymBro.Training do
                status: "active"
              }) do
           {:ok, session} ->
+            ensure_workout_clock(session.id, session.started_at)
+
             broadcast_client_session_event(user_id, :session_started, %{
               session_id: session.id,
               started_at: session.started_at,
@@ -163,6 +165,8 @@ defmodule GymBro.Training do
 
     case update_workout_session(workout_session, attrs) do
       {:ok, session} ->
+        stop_workout_clock(session.id)
+
         broadcast_client_session_event(session.user_id, :session_completed, %{
           completed_at: session.completed_at,
           duration_seconds: session.duration_seconds,
@@ -217,6 +221,14 @@ defmodule GymBro.Training do
 
   def subscribe_to_workout(session_id) do
     Phoenix.PubSub.subscribe(GymBro.PubSub, workout_topic(session_id))
+  end
+
+  def ensure_workout_clock(session_id, started_at) do
+    WorkoutClock.ensure_started(session_id, started_at)
+  end
+
+  def stop_workout_clock(session_id) do
+    WorkoutClock.stop(session_id)
   end
 
   def subscribe_to_client_session(user_id) do

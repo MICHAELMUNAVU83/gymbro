@@ -49,6 +49,21 @@ defmodule GymBro.TrainingTest do
       assert resumed_session.id == session.id
     end
 
+    test "broadcasts elapsed ticks for an active workout over pubsub" do
+      session =
+        workout_session_fixture(%{completed_at: nil, duration_seconds: nil, status: "active"})
+
+      Training.subscribe_to_workout(session.id)
+
+      assert :ok = Training.ensure_workout_clock(session.id, session.started_at)
+
+      assert_receive {:workout_event, :elapsed_tick, payload}
+      assert payload.started_at == session.started_at
+      assert payload.elapsed_seconds >= 1
+
+      assert :ok = Training.stop_workout_clock(session.id)
+    end
+
     test "completes a workout and broadcasts the session completion" do
       session =
         workout_session_fixture(%{completed_at: nil, duration_seconds: nil, status: "active"})

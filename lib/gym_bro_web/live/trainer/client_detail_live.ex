@@ -1,9 +1,7 @@
 defmodule GymBroWeb.Trainer.ClientDetailLive do
   use GymBroWeb, :live_view
 
-  alias GymBro.Programs
-  alias GymBro.Programs.Exercise
-  alias GymBro.{Onboarding, Profiles, Trainer, Training}
+  alias GymBro.{Onboarding, Profiles, Programs, Trainer, Training}
 
   @chart_width 320.0
   @chart_height 160.0
@@ -35,17 +33,13 @@ defmodule GymBroWeb.Trainer.ClientDetailLive do
              |> assign(:active_nav, :clients)
              |> assign(:page_title, detail.client.email)
              |> assign(:active_tab, active_tab)
-             |> assign(:regenerating, false)
-             |> assign(:exercise_editor, nil)
-             |> assign(:exercise_form, nil)
+             |> assign(:live_active_exercise_id, nil)
              |> assign(:live_message_form, live_message_form(""))
+             |> assign(:rest_timer, nil)
+             |> assign(:elapsed_label, "--")
+             |> assign(:tracked_workout_session_id, nil)
              |> assign_client_detail(detail)
-             |> assign(
-               :regeneration_form,
-               regeneration_form("", regeneration_block_weeks(detail))
-             )
-             |> assign_live_session(detail.client.id),
-             layout: {GymBroWeb.Layouts, :trainer_app}}
+             |> assign_live_session(detail.client.id), layout: {GymBroWeb.Layouts, :trainer_app}}
 
           {:error, :not_found} ->
             {:ok,
@@ -105,181 +99,166 @@ defmodule GymBroWeb.Trainer.ClientDetailLive do
     end
   end
 
-  def handle_event("show_add_exercise", %{"day_id" => day_id}, socket) do
-    with {:ok, workout_day} <- find_workout_day(socket.assigns.detail.program, day_id) do
-      exercise = %Exercise{
-        workout_day_id: workout_day.id,
-        position: Programs.next_exercise_position(workout_day.id)
-      }
+  def handle_event("select_live_exercise", %{"exercise_id" => exercise_id}, socket) do
+    active_exercise_id =
+      socket.assigns.live_session.workout_day.exercises
+      |> choose_active_exercise_id(exercise_id)
+      |> Kernel.||(socket.assigns.live_active_exercise_id)
 
-      {:noreply,
-       socket
-       |> assign(:active_tab, "program")
-       |> assign(:exercise_editor, %{
-         mode: :new,
-         workout_day_id: workout_day.id,
-         exercise: exercise
-       })
-       |> assign(:exercise_form, to_form(Programs.change_exercise(exercise)))}
-    else
-      {:error, :not_found} ->
-        {:noreply, put_flash(socket, :error, "That workout day is no longer available.")}
-    end
-  end
-
-  def handle_event("show_edit_exercise", %{"exercise_id" => exercise_id}, socket) do
-    with {:ok, exercise} <- find_exercise(socket.assigns.detail.program, exercise_id) do
-      {:noreply,
-       socket
-       |> assign(:active_tab, "program")
-       |> assign(:exercise_editor, %{
-         mode: :edit,
-         workout_day_id: exercise.workout_day_id,
-         exercise: exercise
-       })
-       |> assign(:exercise_form, to_form(Programs.change_exercise(exercise)))}
-    else
-      {:error, :not_found} ->
-        {:noreply, put_flash(socket, :error, "That exercise is no longer available.")}
-    end
-  end
-
-  def handle_event("cancel_exercise", _params, socket) do
-    {:noreply, clear_exercise_editor(socket)}
-  end
-
-  def handle_event("validate_exercise", %{"exercise" => params}, socket) do
-    editor = socket.assigns.exercise_editor
-    exercise = editor.exercise
-
-    changeset =
-      exercise
-      |> Programs.change_exercise(params)
-      |> Map.put(:action, :validate)
-
-    {:noreply, assign(socket, :exercise_form, to_form(changeset))}
-  end
-
-  def handle_event("save_exercise", %{"exercise" => params}, socket) do
-    editor = socket.assigns.exercise_editor
-    current_user = socket.assigns.current_user
-    client_id = socket.assigns.detail.client.id
-
-    result =
-      case editor.mode do
-        :new ->
-          Trainer.add_exercise_to_client_day(
-            current_user.id,
-            client_id,
-            editor.workout_day_id,
-            params
-          )
-
-        :edit ->
-          Trainer.update_client_exercise(current_user.id, client_id, editor.exercise.id, params)
-      end
-
-    case result do
-      {:ok, _exercise} ->
-        {:noreply,
-         socket
-         |> reload_client_detail()
-         |> clear_exercise_editor()
-         |> assign(:active_tab, "program")
-         |> put_flash(:info, success_message(editor.mode))}
-
-      {:error, %Ecto.Changeset{} = changeset} ->
-        {:noreply, assign(socket, :exercise_form, to_form(changeset))}
-
-      {:error, :unauthorized} ->
-        {:noreply, put_flash(socket, :error, "This client is not currently editable.")}
-
-      {:error, :not_found} ->
-        {:noreply,
-         socket
-         |> reload_client_detail()
-         |> clear_exercise_editor()
-         |> put_flash(:error, "That exercise could not be found anymore.")}
-    end
-  end
-
-  def handle_event("remove_exercise", %{"exercise_id" => exercise_id}, socket) do
-    current_user = socket.assigns.current_user
-    client_id = socket.assigns.detail.client.id
-
-    case Trainer.remove_client_exercise(current_user.id, client_id, exercise_id) do
-      :ok ->
-        {:noreply,
-         socket
-         |> reload_client_detail()
-         |> clear_exercise_editor_if_matching(exercise_id)
-         |> assign(:active_tab, "program")
-         |> put_flash(:info, "Exercise removed from the day.")}
-
-      {:error, :unauthorized} ->
-        {:noreply, put_flash(socket, :error, "This client is not currently editable.")}
-
-      {:error, :not_found} ->
-        {:noreply,
-         socket
-         |> reload_client_detail()
-         |> clear_exercise_editor_if_matching(exercise_id)
-         |> put_flash(:error, "That exercise could not be found anymore.")}
-    end
+    {:noreply, assign(socket, :live_active_exercise_id, active_exercise_id)}
   end
 
   def handle_event(
-        "regenerate_plan",
-        %{"regeneration" => %{"block_weeks" => block_weeks, "trainer_notes" => trainer_notes}},
+        "log_live_set",
+        %{"exercise_id" => exercise_id, "exercise_log" => params},
         socket
       ) do
-    trainer_notes = trainer_notes || ""
-    block_weeks = parse_block_weeks(block_weeks)
     trainer_id = socket.assigns.current_user.id
     client_id = socket.assigns.detail.client.id
+    session = socket.assigns.live_session
+    exercise = find_exercise!(session.workout_day.exercises, exercise_id)
 
-    {:noreply,
-     socket
-     |> assign(:active_tab, "program")
-     |> assign(:regenerating, true)
-     |> assign(:regeneration_form, regeneration_form(trainer_notes, block_weeks))
-     |> start_async(:regenerate_program, fn ->
-       Trainer.regenerate_client_program(
-         trainer_id,
-         client_id,
-         trainer_notes,
-         %{block_weeks: block_weeks}
-       )
-     end)}
+    case Trainer.log_client_exercise_set(
+           trainer_id,
+           client_id,
+           session.id,
+           exercise_id,
+           normalize_log_params(params)
+         ) do
+      {:ok, _log} ->
+        if is_integer(exercise.rest_seconds) and exercise.rest_seconds > 0 do
+          Training.broadcast_workout_event(session.id, :rest_timer_started, %{
+            exercise_id: exercise.id,
+            exercise_name: exercise.name,
+            owner_pid: self(),
+            remaining_seconds: exercise.rest_seconds,
+            total_seconds: exercise.rest_seconds
+          })
+        end
+
+        {:noreply,
+         socket
+         |> refresh_client_view(exercise.id)
+         |> put_flash(:info, "#{exercise.name} set logged.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "This client is not currently editable.")}
+
+      {:error, :not_found} ->
+        {:noreply,
+         socket
+         |> refresh_client_view()
+         |> put_flash(:error, "That exercise is no longer available.")}
+
+      {:error, :exercise_not_in_session} ->
+        {:noreply, put_flash(socket, :error, "That exercise does not belong to this workout.")}
+
+      {:error, _changeset} ->
+        {:noreply,
+         put_flash(socket, :error, "We could not save that set. Check the values and try again.")}
+    end
   end
 
-  @impl true
-  def handle_async(:regenerate_program, {:ok, {:ok, _program}}, socket) do
-    {:noreply,
-     socket
-     |> reload_client_detail()
-     |> assign(:regenerating, false)
-     |> assign(:active_tab, "program")
-     |> put_flash(:info, "Fresh AI program generated for this client.")}
+  def handle_event("cancel_timer", _params, socket) do
+    if socket.assigns.live_session do
+      Training.broadcast_workout_event(socket.assigns.live_session.id, :rest_timer_cleared, %{})
+    end
+
+    {:noreply, socket}
   end
 
-  def handle_async(:regenerate_program, {:ok, {:error, reason}}, socket) do
-    {:noreply,
-     socket
-     |> assign(:regenerating, false)
-     |> put_flash(:error, regeneration_error(reason))}
-  end
+  def handle_event("complete_live_workout", _params, socket) do
+    trainer_id = socket.assigns.current_user.id
+    client_id = socket.assigns.detail.client.id
+    session = socket.assigns.live_session
 
-  def handle_async(:regenerate_program, {:exit, _reason}, socket) do
-    {:noreply,
-     socket
-     |> assign(:regenerating, false)
-     |> put_flash(:error, "Plan regeneration stopped unexpectedly. Please try again.")}
+    case Trainer.complete_client_workout_session(trainer_id, client_id, session.id) do
+      {:ok, _session} ->
+        Training.broadcast_workout_event(session.id, :rest_timer_cleared, %{})
+
+        {:noreply,
+         socket
+         |> refresh_client_view()
+         |> put_flash(:info, "Workout completed.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "This client is not currently editable.")}
+
+      {:error, :not_found} ->
+        {:noreply,
+         socket
+         |> refresh_client_view()
+         |> put_flash(:error, "That workout session is no longer available.")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "We could not complete that workout yet.")}
+    end
   end
 
   @impl true
   def handle_info({:client_session_event, _event, _payload}, socket) do
-    {:noreply, assign_live_session(socket, socket.assigns.detail.client.id)}
+    {:noreply, refresh_client_view(socket)}
+  end
+
+  def handle_info({:workout_event, :rest_timer_started, payload}, socket) do
+    if payload.owner_pid == self() do
+      Process.send_after(self(), {:rest_timer_tick, socket.assigns.live_session.id}, 1_000)
+    end
+
+    {:noreply, assign(socket, :rest_timer, Map.delete(payload, :owner_pid))}
+  end
+
+  def handle_info({:workout_event, :rest_timer_updated, payload}, socket) do
+    {:noreply, assign(socket, :rest_timer, Map.delete(payload, :owner_pid))}
+  end
+
+  def handle_info({:workout_event, :rest_timer_completed, _payload}, socket) do
+    {:noreply,
+     socket
+     |> assign(:rest_timer, nil)
+     |> put_flash(:info, "Rest timer complete.")}
+  end
+
+  def handle_info({:workout_event, :rest_timer_cleared, _payload}, socket) do
+    {:noreply, assign(socket, :rest_timer, nil)}
+  end
+
+  def handle_info({:workout_event, :elapsed_tick, payload}, socket) do
+    elapsed_seconds = Map.get(payload, :elapsed_seconds) || Map.get(payload, "elapsed_seconds")
+    started_at = Map.get(payload, :started_at) || Map.get(payload, "started_at")
+
+    label =
+      if is_integer(elapsed_seconds) do
+        elapsed_label(elapsed_seconds)
+      else
+        elapsed_label(started_at)
+      end
+
+    {:noreply, assign(socket, :elapsed_label, label)}
+  end
+
+  def handle_info({:rest_timer_tick, session_id}, socket) do
+    case socket.assigns.rest_timer do
+      %{remaining_seconds: remaining_seconds} = rest_timer when remaining_seconds > 1 ->
+        next_payload =
+          rest_timer
+          |> Map.put(:remaining_seconds, remaining_seconds - 1)
+          |> Map.put(:owner_pid, self())
+
+        Training.broadcast_workout_event(session_id, :rest_timer_updated, next_payload)
+        Process.send_after(self(), {:rest_timer_tick, session_id}, 1_000)
+        {:noreply, socket}
+
+      %{remaining_seconds: 1} = rest_timer ->
+        Training.broadcast_workout_event(session_id, :rest_timer_completed, %{
+          exercise_id: rest_timer.exercise_id
+        })
+
+        {:noreply, socket}
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -321,7 +300,7 @@ defmodule GymBroWeb.Trainer.ClientDetailLive do
         </button>
       </nav>
 
-      <section>
+      <section class="space-y-6">
         <header class="flex items-start justify-between gap-4">
           <div>
             <p class="type-label inline-flex items-center gap-2">
@@ -329,12 +308,13 @@ defmodule GymBroWeb.Trainer.ClientDetailLive do
             </p>
             <h2 class="mt-2 type-h2">
               {if @live_session,
-                do: live_session_title(@live_session),
+                do: "#{live_session_title(@live_session)} in progress",
                 else: "Waiting for a check-in"}
             </h2>
             <p class="mt-2 type-body-sm">
               {if @live_session,
-                do: "Read-only live view of sets landing in real time.",
+                do:
+                  "Start, guide, and track the athlete's sets here with the same session flow they use.",
                 else:
                   "As soon as this athlete starts a workout, their session and logged sets will appear here."}
             </p>
@@ -342,9 +322,7 @@ defmodule GymBroWeb.Trainer.ClientDetailLive do
           <div :if={@live_session} class="text-right">
             <p class="type-label">Sets logged</p>
             <p class="mt-1 type-mono-stat">{live_session_total_sets(@live_session)}</p>
-            <p class="mt-1 type-body-sm">
-              since {live_session_started_label(@live_session.started_at)}
-            </p>
+            <p class="mt-1 type-body-sm">Elapsed {@elapsed_label}</p>
           </div>
         </header>
 
@@ -352,7 +330,7 @@ defmodule GymBroWeb.Trainer.ClientDetailLive do
           id="live-message-form"
           for={@live_message_form}
           phx-submit="send_live_message"
-          class="mt-4 space-y-3"
+          class="space-y-3"
         >
           <.input
             field={@live_message_form[:message]}
@@ -369,45 +347,165 @@ defmodule GymBroWeb.Trainer.ClientDetailLive do
           </button>
         </.form>
 
-        <div :if={@live_session} class="mt-6 space-y-6">
-          <article :for={exercise <- @live_session.workout_day.exercises}>
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <p class="type-label">Exercise {exercise.position}</p>
-                <h3 class="mt-1 type-h3">{exercise.name}</h3>
-                <p class="mt-1 type-body-sm">{exercise_summary(exercise)}</p>
-              </div>
-              <div class="text-right">
-                <p class="type-label">Logged</p>
-                <p class="mt-1 type-mono-stat">
-                  {length(live_logs_for_exercise(@live_session.exercise_logs, exercise.id))}
-                </p>
-              </div>
+        <div :if={@rest_timer} class="gb-card gb-card--accent">
+          <p class="type-label">Rest timer</p>
+          <div class="mt-3 flex items-center justify-between gap-4">
+            <div>
+              <p class="type-mono-stat" style="font-size: 32px; line-height: 36px;">
+                {@rest_timer.remaining_seconds}s
+              </p>
+              <p class="mt-1 type-body-sm">
+                Recover, then back into {@rest_timer.exercise_name}.
+              </p>
             </div>
+            <button type="button" phx-click="cancel_timer" class="gb-btn gb-btn--secondary gb-btn--sm">
+              Clear
+            </button>
+          </div>
+        </div>
 
-            <ul
-              :if={live_logs_for_exercise(@live_session.exercise_logs, exercise.id) != []}
-              class="mt-3 divide-y divide-border border-y border-border"
+        <div :if={@live_session} class="gb-grid">
+          <div class="gb-grid__main space-y-3">
+            <section
+              :for={exercise <- @live_session.workout_day.exercises}
+              id={"trainer-live-exercise-panel-#{exercise.id}"}
+              class={[
+                "gb-card transition-all duration-200",
+                active_exercise?(@live_active_exercise_id, exercise.id) &&
+                  "gb-card--accent shadow-[var(--shadow-md)]"
+              ]}
             >
-              <li
-                :for={log <- live_logs_for_exercise(@live_session.exercise_logs, exercise.id)}
-                class="flex items-center justify-between py-2 text-sm"
+              <button
+                id={"trainer-live-exercise-toggle-#{exercise.id}"}
+                type="button"
+                phx-click="select_live_exercise"
+                phx-value-exercise_id={exercise.id}
+                aria-controls={"trainer-live-exercise-body-#{exercise.id}"}
+                aria-expanded={to_string(active_exercise?(@live_active_exercise_id, exercise.id))}
+                class="flex w-full items-start justify-between gap-4 text-left"
               >
-                <div>
-                  <span class="font-medium text-text">Set {log.set_number}</span>
-                  <span class="ml-2 text-text-muted">{live_log_description(log)}</span>
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="grid h-6 w-6 flex-none place-items-center rounded-pill bg-accent-soft text-xs font-bold text-accent">
+                      {exercise.position}
+                    </span>
+                    <p class="type-label">Exercise</p>
+                    <span
+                      :if={active_exercise?(@live_active_exercise_id, exercise.id)}
+                      class="gb-pill gb-pill--accent"
+                    >
+                      Active
+                    </span>
+                  </div>
+                  <h3 class="mt-2 type-h2">{exercise.name}</h3>
+                  <p class="mt-1 type-body-sm">{exercise_target(exercise)}</p>
+                  <p :if={exercise.progression_hint} class="mt-2 type-body-sm text-text-muted">
+                    {exercise.progression_hint}
+                  </p>
+                  <p class="mt-3 type-body-sm">
+                    {exercise_progress_label(@live_session.exercise_logs, exercise)}
+                  </p>
                 </div>
-                <span :if={log.rpe} class="type-label">RPE {log.rpe}</span>
-              </li>
-            </ul>
+                <div class="flex flex-none items-start gap-3">
+                  <div class="text-right">
+                    <p class="type-label inline-flex items-center gap-1.5">
+                      <.icon name="hero-forward-mini" class="h-3.5 w-3.5 text-accent" /> Next set
+                    </p>
+                    <p class="mt-1 type-mono-stat">
+                      {next_set_number(@live_session.exercise_logs, exercise.id)}
+                    </p>
+                  </div>
+                  <.icon
+                    name={
+                      if active_exercise?(@live_active_exercise_id, exercise.id),
+                        do: "hero-chevron-up-mini",
+                        else: "hero-chevron-down-mini"
+                    }
+                    class="mt-1 h-5 w-5 text-text-subtle"
+                  />
+                </div>
+              </button>
 
-            <p
-              :if={live_logs_for_exercise(@live_session.exercise_logs, exercise.id) == []}
-              class="mt-3 type-body-sm"
-            >
-              No sets logged for this movement yet.
+              <div
+                :if={active_exercise?(@live_active_exercise_id, exercise.id)}
+                id={"trainer-live-exercise-body-#{exercise.id}"}
+                class="mt-5 space-y-4 border-t border-border pt-4"
+              >
+                <ul
+                  :if={live_logs_for_exercise(@live_session.exercise_logs, exercise.id) != []}
+                  class="divide-y divide-border border-y border-border"
+                >
+                  <li
+                    :for={log <- live_logs_for_exercise(@live_session.exercise_logs, exercise.id)}
+                    class="flex items-center justify-between py-3 text-sm"
+                  >
+                    <div>
+                      <span class="font-medium text-text">Set {log.set_number}</span>
+                      <span class="ml-2 text-text-muted">{log_description(log, exercise)}</span>
+                    </div>
+                    <span :if={log.rpe} class="type-label">RPE {log.rpe}</span>
+                  </li>
+                </ul>
+
+                <form
+                  id={"trainer-set-log-form-#{exercise.id}"}
+                  phx-submit="log_live_set"
+                  class="space-y-3"
+                >
+                  <input type="hidden" name="exercise_id" value={exercise.id} />
+
+                  <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label class="type-label" for={"trainer-reps-#{exercise.id}"}>Reps</label>
+                      <input
+                        id={"trainer-reps-#{exercise.id}"}
+                        type="number"
+                        min="0"
+                        name="exercise_log[reps_completed]"
+                        class="gb-input gb-input--stat mt-2"
+                      />
+                    </div>
+                    <div>
+                      <label class="type-label" for={"trainer-weight-#{exercise.id}"}>
+                        Weight kg
+                      </label>
+                      <input
+                        id={"trainer-weight-#{exercise.id}"}
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        name="exercise_log[weight_kg]"
+                        value={default_weight(exercise)}
+                        class="gb-input gb-input--stat mt-2"
+                      />
+                    </div>
+                  </div>
+
+                  <button type="submit" class="gb-btn gb-btn--primary gb-btn--lg gb-btn--block">
+                    <.icon name="hero-check-solid" class="h-4 w-4" />
+                    Log set {next_set_number(@live_session.exercise_logs, exercise.id)}
+                  </button>
+                </form>
+              </div>
+            </section>
+          </div>
+
+          <aside class="gb-grid__side md:sticky md:top-6 md:self-start gb-card gb-card--accent">
+            <.section_head icon="hero-trophy-mini">Live progress</.section_head>
+            <p class="mt-2 type-h2">{length(@live_session.exercise_logs)} sets logged</p>
+            <p class="mt-2 type-body-sm">
+              Started {live_session_started_label(@live_session.started_at)}
             </p>
-          </article>
+
+            <button
+              id="trainer-complete-workout-button"
+              type="button"
+              phx-click="complete_live_workout"
+              class="gb-btn gb-btn--primary gb-btn--lg gb-btn--block mt-4"
+            >
+              <.icon name="hero-flag-solid" class="h-4 w-4" /> Complete workout
+            </button>
+          </aside>
         </div>
       </section>
 
@@ -502,189 +600,92 @@ defmodule GymBroWeb.Trainer.ClientDetailLive do
               {program_status_label(@detail.program)}
             </span>
           </header>
+
+          <.link
+            navigate={~p"/trainer/clients/#{@detail.client.id}/regenerate"}
+            class="gb-btn gb-btn--secondary gb-btn--block mt-4"
+          >
+            <.icon name="hero-sparkles-mini" class="h-4 w-4" />
+            {if @detail.program, do: "Configure & regenerate plan", else: "Configure & generate plan"}
+          </.link>
         </section>
 
-        <.callout label="AI refresh">
-          <h2 class="type-h3">Regenerate around your notes</h2>
-          <p class="mt-1 type-body-sm">
-            Add context about movement limits, intensity, schedule changes, or focus areas and generate a fresh coached version of the program.
-          </p>
-
-          <.form
-            id="regeneration-form"
-            for={@regeneration_form}
-            phx-submit="regenerate_plan"
-            class="mt-4 space-y-3"
-          >
-            <.input
-              field={@regeneration_form[:block_weeks]}
-              type="select"
-              label="Block length"
-              options={block_weeks_options()}
-            />
-            <.input
-              field={@regeneration_form[:trainer_notes]}
-              type="textarea"
-              label="Trainer notes for AI"
-              placeholder="Example: Reduce axial loading, keep sessions under 50 minutes, bias glute work, and leave one lower day as machine dominant."
-            />
-            <button
-              type="submit"
-              class="gb-btn gb-btn--primary gb-btn--block"
-              disabled={@regenerating}
-            >
-              {if @regenerating, do: "Regenerating plan…", else: "Regenerate program"}
-            </button>
-          </.form>
-        </.callout>
-
-        <section :if={@exercise_form} class="gb-card">
-          <div class="flex items-center justify-between gap-3">
+        <section :if={@program_weeks != []} class="space-y-6">
+          <header class="flex items-center justify-between gap-3">
             <div>
-              <p class="type-label">Exercise editor</p>
-              <h2 class="mt-1 type-h2">{exercise_form_title(@exercise_editor)}</h2>
+              <p class="type-label">Athlete view</p>
+              <h2 class="mt-1 type-h2">Open a day to preview, edit, or start it</h2>
             </div>
-            <button type="button" phx-click="cancel_exercise" class="gb-btn gb-btn--ghost gb-btn--sm">
-              Close
-            </button>
-          </div>
+            <p :if={@live_session} class="type-body-sm text-right">
+              Active session: {live_session_title(@live_session)}
+            </p>
+          </header>
 
-          <.form
-            id="trainer-exercise-form"
-            for={@exercise_form}
-            phx-change="validate_exercise"
-            phx-submit="save_exercise"
-            class="mt-4 space-y-3"
+          <.link
+            :if={@next_workout_day}
+            navigate={~p"/trainer/clients/#{@detail.client.id}/days/#{@next_workout_day.id}"}
+            class="block rounded-card border border-accent bg-accent-soft px-4 py-4 transition hover:shadow-[var(--shadow-md)]"
           >
-            <.input field={@exercise_form[:name]} type="text" label="Exercise name" />
-            <div class="grid grid-cols-2 gap-3">
-              <.input field={@exercise_form[:sets]} type="number" label="Sets" stat />
-              <.input field={@exercise_form[:reps]} type="text" label="Reps" placeholder="8-10" />
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <p class="type-label inline-flex items-center gap-1.5">
+                  <.icon name="hero-flag-mini" class="h-3.5 w-3.5 text-accent" /> Next up for this athlete
+                </p>
+                <p class="mt-1 type-h3">
+                  Week {@next_workout_day.week_number} · Day {@next_workout_day.day_number} — {@next_workout_day.day_label ||
+                    "Workout day"}
+                </p>
+                <p class="mt-1 type-body-sm">{workout_day_subtitle(@next_workout_day)}</p>
+              </div>
+              <.icon name="hero-arrow-right-mini" class="h-5 w-5 flex-none text-accent" />
             </div>
-            <div class="grid grid-cols-2 gap-3">
-              <.input field={@exercise_form[:rest_seconds]} type="number" label="Rest seconds" stat />
-              <.input
-                field={@exercise_form[:weight_kg]}
-                type="number"
-                step="0.1"
-                label="Weight kg"
-                stat
-              />
-            </div>
-            <.input field={@exercise_form[:notes]} type="textarea" label="Exercise notes" />
-            <.input field={@exercise_form[:visual_guide]} type="textarea" label="Visual guide" />
-            <.input field={@exercise_form[:trainer_notes]} type="textarea" label="Trainer notes" />
-            <.input field={@exercise_form[:is_timed]} type="checkbox" label="Timed exercise" />
-            <.input
-              field={@exercise_form[:duration_seconds]}
-              type="number"
-              label="Duration seconds"
-              stat
-            />
+          </.link>
 
-            <button type="submit" class="gb-btn gb-btn--primary gb-btn--block">
-              {exercise_submit_label(@exercise_editor)}
-            </button>
-          </.form>
+          <div :for={{week_number, week_days} <- @program_weeks} class="space-y-3">
+            <header class="flex items-baseline justify-between gap-3 border-b border-border pb-2">
+              <p class="type-label">Week {week_number}</p>
+              <p class="type-body-sm text-text-subtle">{week_summary(week_days)}</p>
+            </header>
+
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <.link
+                :for={workout_day <- week_days}
+                navigate={~p"/trainer/clients/#{@detail.client.id}/days/#{workout_day.id}"}
+                class={workout_day_card_class(workout_day, @live_session)}
+              >
+                <div class="flex items-start justify-between gap-2">
+                  <span class="type-label">Day {workout_day.day_number}</span>
+                  <span
+                    :if={selected_session_matches_day?(@live_session, workout_day)}
+                    class="gb-pill gb-pill--accent"
+                  >
+                    Live
+                  </span>
+                  <span
+                    :if={
+                      not selected_session_matches_day?(@live_session, workout_day) and
+                        to_string(workout_day.id) == to_string(@next_workout_day_id)
+                    }
+                    class="gb-pill gb-pill--accent"
+                  >
+                    Next up
+                  </span>
+                </div>
+                <span class="mt-1 block type-h3">
+                  {workout_day.day_label || "Workout day"}
+                </span>
+                <span class="mt-2 flex items-center justify-between gap-2 type-body-sm">
+                  {workout_day_subtitle(workout_day)}
+                  <.icon name="hero-chevron-right-mini" class="h-4 w-4 flex-none text-text-subtle" />
+                </span>
+              </.link>
+            </div>
+          </div>
         </section>
 
         <p :if={is_nil(@detail.program)} class="type-body-sm">
-          No program is attached to this client yet. Use the AI regenerate form above to create the first coached block.
+          No program is attached to this client yet. Use “Configure &amp; generate plan” above to create the first coached block.
         </p>
-
-        <section
-          :for={workout_day <- List.wrap(@detail.program && @detail.program.workout_days)}
-          class="space-y-3"
-        >
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <p class="type-label">
-                Week {workout_day.week_number} · Day {workout_day.day_number}
-              </p>
-              <h2 class="mt-1 type-h2">{workout_day.day_label || "Workout day"}</h2>
-              <p class="mt-1 type-body-sm">{workout_day_subtitle(workout_day)}</p>
-            </div>
-
-            <button
-              :if={not workout_day.is_rest_day}
-              type="button"
-              phx-click="show_add_exercise"
-              phx-value-day_id={workout_day.id}
-              class="gb-btn gb-btn--secondary gb-btn--sm"
-            >
-              Add exercise
-            </button>
-          </div>
-
-          <p :if={workout_day.trainer_notes} class="type-body-sm" style="color: var(--accent)">
-            Trainer: {workout_day.trainer_notes}
-          </p>
-
-          <p :if={workout_day.is_rest_day} class="type-body-sm">
-            Rest day programmed for recovery and reset.
-          </p>
-
-          <ol :if={not workout_day.is_rest_day} class="divide-y divide-border border-y border-border">
-            <li :for={exercise <- workout_day.exercises} class="py-4">
-              <div class="flex items-start justify-between gap-4">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2">
-                    <span class="type-label">Exercise {exercise.position}</span>
-                    <span
-                      :if={Map.has_key?(@detail.overrides_by_exercise_id, exercise.id)}
-                      class="gb-pill gb-pill--warning"
-                    >
-                      Override saved
-                    </span>
-                  </div>
-                  <h3 class="mt-1 type-h3">{exercise.name}</h3>
-                  <p class="mt-1 type-body-sm">{exercise_summary(exercise)}</p>
-                  <p :if={exercise.notes} class="mt-2 type-body-sm">{exercise.notes}</p>
-                  <p :if={exercise.visual_guide} class="mt-2 type-body-sm">
-                    Visual guide: {exercise.visual_guide}
-                  </p>
-                  <p
-                    :if={exercise.trainer_notes}
-                    class="mt-2 type-body-sm"
-                    style="color: var(--accent)"
-                  >
-                    Trainer: {exercise.trainer_notes}
-                  </p>
-                  <p
-                    :if={Map.has_key?(@detail.overrides_by_exercise_id, exercise.id)}
-                    class="mt-2 type-body-sm"
-                  >
-                    {override_summary(@detail.overrides_by_exercise_id[exercise.id])}
-                  </p>
-                </div>
-
-                <div class="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    phx-click="show_edit_exercise"
-                    phx-value-exercise_id={exercise.id}
-                    class="gb-btn gb-btn--secondary gb-btn--sm"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    phx-click="remove_exercise"
-                    phx-value-exercise_id={exercise.id}
-                    data-confirm="Remove this exercise from the day?"
-                    class="gb-btn gb-btn--destructive gb-btn--sm"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            </li>
-
-            <li :if={workout_day.exercises == []} class="py-4 type-body-sm">
-              No exercises are attached to this day yet.
-            </li>
-          </ol>
-        </section>
       </section>
 
       <section :if={@active_tab == "photos"} class="space-y-8">
@@ -773,6 +774,7 @@ defmodule GymBroWeb.Trainer.ClientDetailLive do
     socket
     |> assign(:detail, detail)
     |> assign(:weight_chart, build_weight_chart(detail.weight_logs, detail.profile))
+    |> assign_program_preview()
   end
 
   defp reload_client_detail(socket) do
@@ -785,85 +787,75 @@ defmodule GymBroWeb.Trainer.ClientDetailLive do
     assign_client_detail(socket, detail)
   end
 
-  defp assign_live_session(socket, client_id) do
-    assign(
-      socket,
-      :live_session,
-      Training.get_active_workout_session_with_details_for_user(client_id)
-    )
-  end
-
-  defp clear_exercise_editor(socket) do
+  defp refresh_client_view(socket, preferred_live_exercise_id \\ nil) do
     socket
-    |> assign(:exercise_editor, nil)
-    |> assign(:exercise_form, nil)
+    |> reload_client_detail()
+    |> assign_live_session(socket.assigns.detail.client.id, preferred_live_exercise_id)
   end
 
-  defp clear_exercise_editor_if_matching(socket, exercise_id) do
-    editor = socket.assigns.exercise_editor
-
-    if editor && editor.mode == :edit && to_string(editor.exercise.id) == to_string(exercise_id) do
-      clear_exercise_editor(socket)
-    else
-      socket
-    end
+  defp assign_live_session(socket, client_id) do
+    assign_live_session(socket, client_id, nil)
   end
 
-  defp find_workout_day(nil, _day_id), do: {:error, :not_found}
+  defp assign_live_session(socket, client_id, preferred_live_exercise_id) do
+    live_session = Training.get_active_workout_session_with_details_for_user(client_id)
 
-  defp find_workout_day(program, day_id) do
-    case Enum.find(program.workout_days, &(to_string(&1.id) == to_string(day_id))) do
-      nil -> {:error, :not_found}
-      workout_day -> {:ok, workout_day}
-    end
+    socket
+    |> assign(:live_session, live_session)
+    |> maybe_track_live_session(preferred_live_exercise_id)
+    |> assign_program_preview()
   end
 
-  defp find_exercise(nil, _exercise_id), do: {:error, :not_found}
+  defp assign_program_preview(socket) do
+    program_workout_days =
+      socket.assigns.detail.program
+      |> case do
+        nil -> []
+        program -> List.wrap(program.workout_days)
+      end
 
-  defp find_exercise(program, exercise_id) do
-    program.workout_days
-    |> Enum.find_value(fn workout_day ->
-      Enum.find(workout_day.exercises, &(to_string(&1.id) == to_string(exercise_id)))
-    end)
-    |> case do
-      nil -> {:error, :not_found}
-      exercise -> {:ok, exercise}
+    next_workout_day_id = Programs.next_workout_day_id_for_user(socket.assigns.detail.client.id)
+
+    next_workout_day =
+      Enum.find(program_workout_days, &(to_string(&1.id) == to_string(next_workout_day_id)))
+
+    socket
+    |> assign(:program_workout_days, program_workout_days)
+    |> assign(:program_weeks, group_days_by_week(program_workout_days))
+    |> assign(:next_workout_day_id, next_workout_day_id)
+    |> assign(:next_workout_day, next_workout_day)
+  end
+
+  defp maybe_track_live_session(socket, preferred_live_exercise_id) do
+    case socket.assigns.live_session do
+      nil ->
+        socket
+        |> assign(:rest_timer, nil)
+        |> assign(:elapsed_label, "--")
+        |> assign(:live_active_exercise_id, nil)
+        |> assign(:tracked_workout_session_id, nil)
+
+      session ->
+        if connected?(socket) and socket.assigns[:tracked_workout_session_id] != session.id do
+          Training.subscribe_to_workout(session.id)
+          Training.ensure_workout_clock(session.id, session.started_at)
+        end
+
+        active_exercise_id =
+          resolve_active_exercise_id(
+            session,
+            preferred_live_exercise_id || socket.assigns[:live_active_exercise_id]
+          )
+
+        socket
+        |> assign(:tracked_workout_session_id, session.id)
+        |> assign(:live_active_exercise_id, active_exercise_id)
+        |> assign(:elapsed_label, elapsed_label(session.started_at))
     end
   end
 
   defp normalize_tab(tab) when tab in @tabs, do: tab
   defp normalize_tab(_tab), do: "stats"
-
-  defp regeneration_form(trainer_notes, block_weeks) do
-    to_form(%{"block_weeks" => to_string(block_weeks), "trainer_notes" => trainer_notes},
-      as: :regeneration
-    )
-  end
-
-  defp regeneration_block_weeks(%{program: %{total_weeks: total_weeks}})
-       when is_integer(total_weeks) and total_weeks > 0,
-       do: total_weeks
-
-  defp regeneration_block_weeks(%{profile: %{preferred_block_weeks: total_weeks}})
-       when is_integer(total_weeks) and total_weeks > 0,
-       do: total_weeks
-
-  defp regeneration_block_weeks(_detail), do: 9
-
-  defp parse_block_weeks(value) when is_integer(value) and value > 0, do: value
-
-  defp parse_block_weeks(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {parsed, _} when parsed > 0 -> parsed
-      _ -> 9
-    end
-  end
-
-  defp parse_block_weeks(_value), do: 9
-
-  defp block_weeks_options do
-    Enum.map(3..16, fn weeks -> {"#{weeks} weeks", Integer.to_string(weeks)} end)
-  end
 
   defp live_message_form(message) do
     to_form(%{"message" => message}, as: :live_message)
@@ -914,16 +906,201 @@ defmodule GymBroWeb.Trainer.ClientDetailLive do
     |> Enum.sort_by(&{&1.set_number, &1.inserted_at})
   end
 
-  defp live_log_description(log) do
+  defp group_days_by_week(program_workout_days) do
+    program_workout_days
+    |> Enum.group_by(& &1.week_number)
+    |> Enum.map(fn {week_number, days} ->
+      {week_number, Enum.sort_by(days, & &1.day_number)}
+    end)
+    |> Enum.sort_by(fn {week_number, _days} -> week_number end)
+  end
+
+  defp week_summary(week_days) do
+    training_days = Enum.count(week_days, &(not &1.is_rest_day))
+
+    case training_days do
+      0 -> "Recovery week"
+      1 -> "1 training day"
+      count -> "#{count} training days"
+    end
+  end
+
+  defp workout_day_card_class(workout_day, live_session) do
+    active? = selected_session_matches_day?(live_session, workout_day)
+
+    base = "block rounded-card border px-4 py-4 transition hover:border-accent hover:shadow-[var(--shadow-md)] "
+
+    if active? do
+      base <> "border-accent bg-accent-soft shadow-[var(--shadow-md)]"
+    else
+      base <> "border-border bg-surface"
+    end
+  end
+
+  defp selected_session_matches_day?(%{workout_day_id: workout_day_id}, workout_day),
+    do: to_string(workout_day_id) == to_string(workout_day.id)
+
+  defp selected_session_matches_day?(_live_session, _workout_day), do: false
+
+  defp normalize_log_params(params) do
+    params
+    |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
+    |> Map.new()
+  end
+
+  defp find_exercise!(exercises, exercise_id) do
+    Enum.find(exercises, &(to_string(&1.id) == to_string(exercise_id))) ||
+      raise Ecto.NoResultsError, queryable: Training
+  end
+
+  defp next_set_number(exercise_logs, exercise_id) do
+    exercise_logs
+    |> live_logs_for_exercise(exercise_id)
+    |> List.last()
+    |> case do
+      nil -> 1
+      log -> log.set_number + 1
+    end
+  end
+
+  defp exercise_target(exercise) do
     [
-      if(log.reps_completed, do: "#{log.reps_completed} reps"),
-      if(log.weight_kg, do: "#{format_weight_number(log.weight_kg)} kg"),
-      if(log.duration_seconds, do: "#{log.duration_seconds}s"),
-      if(log.is_personal_record, do: "PR")
+      exercise.sets && "#{exercise.sets} sets",
+      exercise.reps && "#{exercise.reps} reps",
+      display_weight(exercise) && "#{format_number(display_weight(exercise))} kg"
     ]
     |> Enum.reject(&is_nil/1)
     |> Enum.join(" • ")
   end
+
+  defp active_exercise?(active_exercise_id, exercise_id),
+    do: to_string(active_exercise_id) == to_string(exercise_id)
+
+  defp exercise_progress_label(exercise_logs, exercise) do
+    completed_sets = exercise_logs |> live_logs_for_exercise(exercise.id) |> length()
+
+    cond do
+      completed_sets == 0 ->
+        "Ready to start"
+
+      is_integer(exercise.sets) ->
+        "#{completed_sets} of #{exercise.sets} sets logged"
+
+      true ->
+        "#{completed_sets} sets logged"
+    end
+  end
+
+  defp log_description(log, exercise) do
+    segments =
+      [
+        if(log.reps_completed, do: "#{log.reps_completed} reps"),
+        if(log.weight_kg, do: "#{format_number(log.weight_kg)} kg"),
+        if(log.is_personal_record, do: "PR")
+      ]
+      |> Enum.reject(&is_nil/1)
+
+    if segments == [], do: exercise_target(exercise), else: Enum.join(segments, " • ")
+  end
+
+  defp elapsed_label(nil), do: "--"
+
+  defp elapsed_label(elapsed_seconds) when is_integer(elapsed_seconds) do
+    minutes = div(elapsed_seconds, 60)
+    seconds = rem(elapsed_seconds, 60)
+    "#{minutes}m #{String.pad_leading(Integer.to_string(seconds), 2, "0")}s"
+  end
+
+  defp elapsed_label(started_at) do
+    elapsed_seconds = max(DateTime.diff(DateTime.utc_now(), started_at, :second), 1)
+    elapsed_label(elapsed_seconds)
+  end
+
+  defp default_weight(exercise) do
+    case display_weight(exercise) do
+      nil -> ""
+      weight -> format_number(weight)
+    end
+  end
+
+  defp display_weight(%{recommended_weight_kg: recommended_weight_kg})
+       when is_number(recommended_weight_kg),
+       do: recommended_weight_kg
+
+  defp display_weight(%{weight_kg: weight_kg}), do: weight_kg
+
+  defp resolve_active_exercise_id(session, preferred_active_exercise_id) do
+    exercises = session.workout_day.exercises
+
+    cond do
+      preferred_active_exercise_id &&
+          exercise_still_in_progress?(session, preferred_active_exercise_id) ->
+        choose_active_exercise_id(exercises, preferred_active_exercise_id)
+
+      preferred_active_exercise_id ->
+        next_incomplete_exercise_id(session, preferred_active_exercise_id) ||
+          choose_default_active_exercise_id(session)
+
+      true ->
+        choose_default_active_exercise_id(session)
+    end
+  end
+
+  defp choose_default_active_exercise_id(session) do
+    next_incomplete_exercise_id(session) ||
+      case session.workout_day.exercises do
+        [exercise | _rest] -> exercise.id
+        [] -> nil
+      end
+  end
+
+  defp next_incomplete_exercise_id(session, preferred_active_exercise_id \\ nil) do
+    exercises = session.workout_day.exercises
+
+    ordered_exercises =
+      case choose_active_exercise_id(exercises, preferred_active_exercise_id) do
+        nil ->
+          exercises
+
+        active_exercise_id ->
+          {before_active, from_active} =
+            Enum.split_while(exercises, &(to_string(&1.id) != to_string(active_exercise_id)))
+
+          case from_active do
+            [_active | remaining] -> remaining ++ before_active
+            [] -> exercises
+          end
+      end
+
+    ordered_exercises
+    |> Enum.find(&(not exercise_completed?(session, &1)))
+    |> case do
+      nil -> nil
+      exercise -> exercise.id
+    end
+  end
+
+  defp exercise_still_in_progress?(session, exercise_id) do
+    case Enum.find(session.workout_day.exercises, &(to_string(&1.id) == to_string(exercise_id))) do
+      nil -> false
+      exercise -> not exercise_completed?(session, exercise)
+    end
+  end
+
+  defp exercise_completed?(session, exercise) do
+    prescribed_sets = exercise.sets || 1_000_000
+    completed_sets = session.exercise_logs |> live_logs_for_exercise(exercise.id) |> length()
+    completed_sets >= prescribed_sets
+  end
+
+  defp choose_active_exercise_id(exercises, exercise_id) do
+    Enum.find_value(exercises, fn exercise ->
+      if to_string(exercise.id) == to_string(exercise_id), do: exercise.id
+    end)
+  end
+
+  defp format_number(value) when is_float(value), do: :erlang.float_to_binary(value, decimals: 1)
+  defp format_number(value), do: to_string(value)
 
   defp relationship_badge_class("active"), do: "gb-pill gb-pill--success"
   defp relationship_badge_class("paused"), do: "gb-pill gb-pill--warning"
@@ -1088,64 +1265,10 @@ defmodule GymBroWeb.Trainer.ClientDetailLive do
     end
   end
 
-  defp exercise_summary(exercise) do
-    [
-      if(exercise.sets, do: "#{exercise.sets} sets"),
-      if(exercise.reps, do: "#{exercise.reps} reps"),
-      if(exercise.weight_kg, do: "#{format_weight_number(exercise.weight_kg)} kg"),
-      if(exercise.rest_seconds, do: "#{exercise.rest_seconds}s rest"),
-      timed_label(exercise)
-    ]
-    |> Enum.reject(&is_nil/1)
-    |> Enum.join(" • ")
-  end
-
-  defp timed_label(%{is_timed: true, duration_seconds: duration_seconds})
-       when is_integer(duration_seconds),
-       do: "#{duration_seconds}s timed"
-
-  defp timed_label(_exercise), do: nil
-
-  defp override_summary(override) do
-    [
-      if(override.sets, do: "#{override.sets} sets"),
-      if(override.reps, do: "#{override.reps} reps"),
-      if(override.weight_kg, do: "#{format_weight_number(override.weight_kg)} kg"),
-      override.notes
-    ]
-    |> Enum.reject(fn value -> is_nil(value) or value == "" end)
-    |> Enum.join(" • ")
-  end
-
   defp titleize(value) do
     value
     |> to_string()
     |> String.split("_")
     |> Enum.map_join(" ", &String.capitalize/1)
   end
-
-  defp exercise_form_title(%{mode: :new}), do: "Add an exercise"
-  defp exercise_form_title(%{mode: :edit}), do: "Edit exercise"
-  defp exercise_form_title(_editor), do: "Exercise"
-
-  defp exercise_submit_label(%{mode: :new}), do: "Add exercise"
-  defp exercise_submit_label(%{mode: :edit}), do: "Save exercise"
-  defp exercise_submit_label(_editor), do: "Save"
-
-  defp success_message(:new), do: "Exercise added to the client day."
-  defp success_message(:edit), do: "Exercise update saved."
-
-  defp regeneration_error(:missing_profile),
-    do: "This client needs a completed profile before AI can build a plan."
-
-  defp regeneration_error(:missing_openai_api_key),
-    do: "OpenAI is not configured in this environment yet."
-
-  defp regeneration_error(:openai_timeout),
-    do: "Plan generation timed out. Please try again."
-
-  defp regeneration_error(:openai_rate_limited),
-    do: "OpenAI is busy right now. Please try regenerating again in a moment."
-
-  defp regeneration_error(_reason), do: "We could not regenerate the plan yet. Please try again."
 end

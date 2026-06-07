@@ -9,14 +9,20 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
 
     case Onboarding.next_path(current_user) do
       "/" ->
+        socket = assign_session_data(socket, current_user, session_id)
+
         if connected?(socket) do
           Training.subscribe_to_workout(session_id)
           Training.subscribe_to_client_session(current_user.id)
+
+          Training.ensure_workout_clock(
+            socket.assigns.session.id,
+            socket.assigns.session.started_at
+          )
         end
 
         {:ok,
          socket
-         |> assign_session_data(current_user, session_id)
          |> assign(:page_title, "Active Workout")
          |> assign(:rest_timer, nil)
          |> assign(:trainer_message_toast, nil), layout: false}
@@ -114,6 +120,20 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
     {:noreply, assign(socket, :rest_timer, nil)}
   end
 
+  def handle_info({:workout_event, :elapsed_tick, payload}, socket) do
+    elapsed_seconds = Map.get(payload, :elapsed_seconds) || Map.get(payload, "elapsed_seconds")
+    started_at = Map.get(payload, :started_at) || Map.get(payload, "started_at")
+
+    label =
+      if is_integer(elapsed_seconds) do
+        elapsed_label(elapsed_seconds)
+      else
+        elapsed_label(started_at)
+      end
+
+    {:noreply, assign(socket, :elapsed_label, label)}
+  end
+
   def handle_info({:client_session_event, :trainer_message, payload}, socket) do
     toast = %{
       id: System.unique_integer([:positive]),
@@ -203,7 +223,7 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
               <p class="type-label inline-flex items-center gap-1.5">
                 <.icon name="hero-clock-mini" class="h-3.5 w-3.5 text-accent" /> Elapsed
               </p>
-              <p class="mt-1 type-mono-stat">{elapsed_label(@session.started_at)}</p>
+              <p class="mt-1 type-mono-stat">{@elapsed_label}</p>
             </div>
           </header>
 
@@ -378,6 +398,7 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
     socket
     |> assign(:session, session)
     |> assign(:active_exercise_id, active_exercise_id)
+    |> assign(:elapsed_label, elapsed_label(session.started_at))
   end
 
   defp normalize_log_params(params) do
@@ -452,11 +473,15 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
 
   defp elapsed_label(nil), do: "--"
 
-  defp elapsed_label(started_at) do
-    elapsed_seconds = max(DateTime.diff(DateTime.utc_now(), started_at, :second), 1)
+  defp elapsed_label(elapsed_seconds) when is_integer(elapsed_seconds) do
     minutes = div(elapsed_seconds, 60)
     seconds = rem(elapsed_seconds, 60)
     "#{minutes}m #{String.pad_leading(Integer.to_string(seconds), 2, "0")}s"
+  end
+
+  defp elapsed_label(started_at) do
+    elapsed_seconds = max(DateTime.diff(DateTime.utc_now(), started_at, :second), 1)
+    elapsed_label(elapsed_seconds)
   end
 
   defp default_weight(exercise) do

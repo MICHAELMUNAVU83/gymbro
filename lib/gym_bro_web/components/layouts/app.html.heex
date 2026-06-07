@@ -4,8 +4,8 @@
     @current_user && @current_user.role == "athlete" && "app-shell--with-nav"
   ]}>
     <header :if={is_nil(@current_user)} class="safe-top flex items-center justify-between py-4">
-      <div>
-        <p class="type-label">GymBro</p>
+      <div class="min-w-0">
+        <.brand_logo href={~p"/"} class="block w-[136px]" img_class="h-auto w-full" />
         <p class="mt-1 type-body-sm">AI-powered workout tracking</p>
       </div>
 
@@ -23,6 +23,26 @@
       <.flash_group flash={@flash} />
       {@inner_content}
     </main>
+
+    <footer class="pb-4 pt-2 text-center">
+      <p class="text-xs text-text-subtle">
+        Built by
+        <a
+          href="https://michaelmunavu.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="font-medium text-text transition hover:text-accent"
+        >
+          Michael Munavu
+        </a>
+        (<a
+          href="https://michaelmunavu.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="transition hover:text-accent"
+        >michaelmunavu.com</a>)
+      </p>
+    </footer>
   </div>
 
   <nav

@@ -117,6 +117,32 @@ defmodule GymBroWeb.Athlete.WorkoutFlowLiveTest do
       assert Training.get_workout_session!(session.id).status == "completed"
     end
 
+    test "updates the elapsed timer without a refresh", %{conn: conn} do
+      %{user: user, workout_day: workout_day} = athlete_workout_fixture()
+
+      started_at = DateTime.utc_now() |> DateTime.add(-61, :second) |> DateTime.truncate(:second)
+
+      {:ok, session} =
+        Training.create_workout_session(%{
+          started_at: started_at,
+          status: "active",
+          user_id: user.id,
+          workout_day_id: workout_day.id
+        })
+
+      conn = log_in_user(conn, user)
+      {:ok, view, html} = live(conn, ~p"/workouts/session/#{session.id}")
+
+      assert html =~ "1m 01s"
+
+      send(
+        view.pid,
+        {:workout_event, :elapsed_tick, %{elapsed_seconds: 62, started_at: started_at}}
+      )
+
+      assert render(view) =~ "1m 02s"
+    end
+
     test "shows one expanded exercise at a time in the active workout view", %{conn: conn} do
       %{
         exercise: exercise,

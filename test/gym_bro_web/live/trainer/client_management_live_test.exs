@@ -299,9 +299,10 @@ defmodule GymBroWeb.Trainer.ClientManagementLiveTest do
     assert html =~ "Client file"
     assert html =~ "Weight trend"
     assert html =~ "Live session"
-    assert html =~ "Read-only live view"
+    assert html =~ "in progress"
     assert html =~ "Set 1"
     assert html =~ "10 reps"
+    assert has_element?(view, "#trainer-set-log-form-#{exercise.id}")
 
     photos_html =
       view
@@ -325,69 +326,27 @@ defmodule GymBroWeb.Trainer.ClientManagementLiveTest do
       |> render_click()
 
     assert program_html =~ "Build Block"
-    assert program_html =~ "Incline Dumbbell Press"
+    assert program_html =~ "Open a day to preview, edit, or start it"
+    assert program_html =~ "Next up for this athlete"
+    assert program_html =~ "Configure"
 
-    view
-    |> element("button[phx-click='show_add_exercise'][phx-value-day_id='#{workout_day.id}']")
-    |> render_click()
+    assert has_element?(
+             view,
+             ~s{a[href="/trainer/clients/#{client.id}/days/#{workout_day.id}"]}
+           )
 
-    add_html =
+    assert has_element?(view, ~s{a[href="/trainer/clients/#{client.id}/regenerate"]})
+
+    # Live session logging stays on the client detail page.
+    updated_live_html =
       view
-      |> form("#trainer-exercise-form", %{
-        exercise: %{
-          name: "Chest Supported Row",
-          notes: "Brace the chest into the pad.",
-          reps: "10-12",
-          rest_seconds: "75",
-          sets: "3",
-          trainer_notes: "Own the squeeze.",
-          weight_kg: "20.0"
-        }
+      |> form("#trainer-set-log-form-#{exercise.id}", %{
+        exercise_log: %{reps_completed: "8", weight_kg: "22.5"}
       })
       |> render_submit()
-
-    assert add_html =~ "Chest Supported Row"
-
-    view
-    |> element("button[phx-click='show_edit_exercise'][phx-value-exercise_id='#{exercise.id}']")
-    |> render_click()
-
-    edit_html =
-      view
-      |> form("#trainer-exercise-form", %{
-        exercise: %{
-          name: "Incline Dumbbell Press",
-          notes: "Use a slower eccentric.",
-          reps: "10-12",
-          rest_seconds: "90",
-          sets: "3",
-          trainer_notes: "Deload the final set.",
-          weight_kg: "22.5"
-        }
-      })
-      |> render_submit()
-
-    assert edit_html =~ "Override saved"
-    assert edit_html =~ "Deload the final set."
-
-    {:ok, _second_log} =
-      Training.log_exercise_set(session, exercise, %{
-        reps_completed: 8,
-        rpe: 9,
-        weight_kg: 22.5
-      })
-
-    updated_live_html = render(view)
 
     assert updated_live_html =~ "Set 2"
     assert updated_live_html =~ "22.5 kg"
-
-    remove_html =
-      view
-      |> element("button[phx-click='remove_exercise'][phx-value-exercise_id='#{exercise.id}']")
-      |> render_click()
-
-    assert remove_html =~ "Exercise removed from the day."
 
     add_message_html =
       view
@@ -398,21 +357,186 @@ defmodule GymBroWeb.Trainer.ClientManagementLiveTest do
 
     assert add_message_html =~ "Coach note sent."
 
-    view
-    |> form("#regeneration-form", %{
-      regeneration: %{
-        block_weeks: "6",
-        trainer_notes: "Reduce pressing volume and keep sessions under 50 minutes."
+    # The day page links out to dedicated add/edit exercise pages.
+    {:ok, day_view, day_html} =
+      live(conn, ~p"/trainer/clients/#{client.id}/days/#{workout_day.id}")
+
+    assert day_html =~ "Incline Dumbbell Press"
+    assert day_html =~ "Week 1 · Day 1"
+    assert day_html =~ "Session control"
+
+    assert has_element?(
+             day_view,
+             ~s{a[href="/trainer/clients/#{client.id}/days/#{workout_day.id}/exercises/new"]}
+           )
+
+    # Adding an exercise happens on its own page and returns to the day.
+    {:ok, new_view, _new_html} =
+      live(conn, ~p"/trainer/clients/#{client.id}/days/#{workout_day.id}/exercises/new")
+
+    new_view
+    |> form("#trainer-exercise-form", %{
+      exercise: %{
+        name: "Chest Supported Row",
+        notes: "Brace the chest into the pad.",
+        reps: "10-12",
+        rest_seconds: "75",
+        sets: "3",
+        trainer_notes: "Own the squeeze.",
+        weight_kg: "20.0"
       }
     })
     |> render_submit()
 
-    regenerated_html = render_async(view)
-    {:ok, detail} = Trainer.get_managed_client_detail(trainer.id, client.id)
+    assert_redirect(new_view, ~p"/trainer/clients/#{client.id}/days/#{workout_day.id}")
 
-    assert regenerated_html =~ "Regenerated Client Plan"
-    assert regenerated_html =~ "Machine Chest Press"
+    # Editing an exercise happens on its own page and returns to the day.
+    {:ok, edit_view, _edit_html} =
+      live(
+        conn,
+        ~p"/trainer/clients/#{client.id}/days/#{workout_day.id}/exercises/#{exercise.id}/edit"
+      )
+
+    edit_view
+    |> form("#trainer-exercise-form", %{
+      exercise: %{
+        name: "Incline Dumbbell Press",
+        notes: "Use a slower eccentric.",
+        reps: "10-12",
+        rest_seconds: "90",
+        sets: "3",
+        trainer_notes: "Deload the final set.",
+        weight_kg: "22.5"
+      }
+    })
+    |> render_submit()
+
+    assert_redirect(edit_view, ~p"/trainer/clients/#{client.id}/days/#{workout_day.id}")
+
+    {:ok, updated_day_view, updated_day_html} =
+      live(conn, ~p"/trainer/clients/#{client.id}/days/#{workout_day.id}")
+
+    assert updated_day_html =~ "Chest Supported Row"
+    assert updated_day_html =~ "Override saved"
+    assert updated_day_html =~ "Deload the final set."
+
+    remove_html =
+      updated_day_view
+      |> element("button[phx-click='remove_exercise'][phx-value-exercise_id='#{exercise.id}']")
+      |> render_click()
+
+    assert remove_html =~ "Exercise removed from the day."
+
+    # Reconfiguring the profile + regenerating now lives on its own page.
+    {:ok, regen_view, regen_html} =
+      live(conn, ~p"/trainer/clients/#{client.id}/regenerate")
+
+    assert regen_html =~ "Configure"
+    assert regen_html =~ "Target weight"
+
+    regen_view
+    |> form("#regeneration-form", %{
+      user_profile: %{
+        weight_kg: "79.0",
+        goal_weight_kg: "74.0",
+        height_cm: "176.0",
+        age: "28",
+        goal: "weight_loss",
+        fitness_level: "intermediate",
+        days_per_week: "4",
+        preferred_session_minutes: "60",
+        preferred_exercises_per_day: "4",
+        preferred_block_weeks: "6",
+        equipment: "gym"
+      },
+      trainer_notes: "Reduce pressing volume and keep sessions under 50 minutes."
+    })
+    |> render_submit()
+
+    assert_redirect(regen_view, ~p"/trainer/clients/#{client.id}?tab=program")
+
+    {:ok, detail} = Trainer.get_managed_client_detail(trainer.id, client.id)
+    assert detail.program.name == "Regenerated Client Plan"
     assert detail.program.total_weeks == 6
+
+    updated_profile = Profiles.get_user_profile_by_user(client.id)
+    assert updated_profile.goal_weight_kg == 74.0
+    assert updated_profile.goal == "weight_loss"
+  end
+
+  test "trainer can start a client workout from the per-day page", %{conn: conn} do
+    trainer = trainer_user_with_profile()
+    client = user_fixture(%{email: "jamie.preview@example.com"})
+
+    {:ok, _profile} = Profiles.upsert_user_profile(client.id, athlete_profile_attrs())
+
+    {:ok, _relationship} =
+      Trainer.create_trainer_client(%{
+        trainer_id: trainer.id,
+        client_id: client.id,
+        status: "active"
+      })
+
+    {:ok, program} =
+      Programs.create_program(%{
+        ai_raw_plan: %{},
+        created_by_id: trainer.id,
+        current_phase: 1,
+        current_week: 1,
+        description: "Starter block",
+        name: "Preview Block",
+        phase_name: "Foundation",
+        source: "trainer",
+        status: "active",
+        total_weeks: 8,
+        user_id: client.id
+      })
+
+    {:ok, workout_day} =
+      Programs.create_workout_day(%{
+        day_label: "Lower",
+        day_number: 1,
+        estimated_duration_min: 45,
+        is_rest_day: false,
+        muscle_groups: ["quads", "glutes"],
+        program_id: program.id,
+        week_number: 1,
+        workout_type: "lower"
+      })
+
+    {:ok, exercise} =
+      Programs.create_exercise(%{
+        name: "Goblet Squat",
+        position: 1,
+        reps: "10",
+        rest_seconds: 60,
+        sets: 3,
+        weight_kg: 24.0,
+        workout_day_id: workout_day.id
+      })
+
+    conn = log_in_user(conn, trainer)
+    {:ok, view, html} = live(conn, ~p"/trainer/clients/#{client.id}/days/#{workout_day.id}")
+
+    assert html =~ "Lower"
+    assert html =~ exercise.name
+    assert html =~ "Start workout"
+
+    view
+    |> element("#trainer-start-workout-button")
+    |> render_click()
+
+    assert_redirect(view, ~p"/trainer/clients/#{client.id}?tab=program")
+
+    session = Training.get_active_workout_session_for_user(client.id)
+    assert session.workout_day_id == workout_day.id
+
+    # Landing back on the detail page surfaces the live logger for the session.
+    {:ok, detail_view, detail_html} =
+      live(conn, ~p"/trainer/clients/#{client.id}?tab=program")
+
+    assert detail_html =~ "Lower in progress"
+    assert has_element?(detail_view, "#trainer-set-log-form-#{exercise.id}")
   end
 
   defp trainer_user_with_profile do
