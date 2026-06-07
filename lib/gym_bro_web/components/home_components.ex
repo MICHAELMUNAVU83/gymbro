@@ -16,10 +16,8 @@ defmodule GymBroWeb.HomeComponents do
         <.marquee_section />
         <.roles_section />
         <.features_section />
-        <.pricing_section />
         <.why_section />
         <.cta_section />
-        <.blog_section />
       </main>
 
       <.site_footer />
@@ -332,82 +330,6 @@ defmodule GymBroWeb.HomeComponents do
     """
   end
 
-  def pricing_section(assigns) do
-    ~H"""
-    <section id="pricing" class="border-y border-border bg-surface-alt py-24">
-      <div class="mx-auto max-w-[1290px] px-5">
-        <div class="max-w-3xl">
-          <p class="type-label">Plans</p>
-          <h2 class="mt-3 text-4xl font-bold uppercase leading-tight text-text lg:text-5xl">
-            Choose your GymBro plan
-          </h2>
-          <p class="mt-6 text-lg leading-8 text-text-muted">
-            Start free as an athlete, upgrade when you want deeper analytics, or bring your
-            whole coaching business onto GymBro.
-          </p>
-        </div>
-
-        <div class="mt-14 grid gap-6 lg:grid-cols-4">
-          <%= for card <- pricing_cards() do %>
-            <.pricing_card card={card} />
-          <% end %>
-        </div>
-      </div>
-    </section>
-    """
-  end
-
-  attr :card, :map, required: true
-
-  def pricing_card(assigns) do
-    ~H"""
-    <article class={[
-      "flex h-full flex-col rounded-lg border bg-surface p-8",
-      if(@card.highlight, do: "border-accent shadow-md", else: "border-border")
-    ]}>
-      <div class="flex items-start justify-between gap-3">
-        <div>
-          <h3 class="text-xl font-semibold text-text">{@card.title}</h3>
-          <p class="mt-2 text-sm leading-6 text-text-muted">{@card.description}</p>
-        </div>
-        <span
-          :if={@card.badge}
-          class="rounded-pill bg-accent-soft px-3 py-1 text-xs font-semibold uppercase tracking-wide text-accent"
-        >
-          {@card.badge}
-        </span>
-      </div>
-
-      <div class="mt-8 flex items-end gap-2">
-        <span class="text-5xl font-bold leading-none text-text">{@card.price}</span>
-        <span class="pb-1 text-base text-text-muted">{@card.period}</span>
-      </div>
-
-      <a
-        href={@card.href}
-        class={[
-          "mt-8 inline-flex items-center justify-center rounded-pill px-6 py-3 font-medium transition",
-          if(@card.highlight,
-            do: "bg-accent text-white hover:bg-accent-hover",
-            else: "border border-border bg-surface text-text hover:bg-surface-alt"
-          )
-        ]}
-      >
-        {@card.cta}
-      </a>
-
-      <ul class="mt-8 space-y-3 text-sm leading-6 text-text-muted">
-        <%= for feature <- @card.features do %>
-          <li class="flex items-start gap-3">
-            <span class="mt-0.5 text-accent">&#10003;</span>
-            <span>{feature}</span>
-          </li>
-        <% end %>
-      </ul>
-    </article>
-    """
-  end
-
   def why_section(assigns) do
     ~H"""
     <section class="py-24">
@@ -476,53 +398,6 @@ defmodule GymBroWeb.HomeComponents do
         </div>
       </div>
     </section>
-    """
-  end
-
-  def blog_section(assigns) do
-    ~H"""
-    <section id="blog" class="py-24">
-      <div class="mx-auto max-w-[1290px] px-5">
-        <div class="text-center">
-          <p class="type-label">Resources</p>
-          <h2 class="mt-3 text-4xl font-bold uppercase leading-tight text-text lg:text-5xl">
-            From the GymBro blog
-          </h2>
-        </div>
-
-        <div class="mt-16 flex flex-col gap-8">
-          <%= for article <- blog_articles() do %>
-            <.blog_article article={article} />
-          <% end %>
-        </div>
-      </div>
-    </section>
-    """
-  end
-
-  attr :article, :map, required: true
-
-  def blog_article(assigns) do
-    ~H"""
-    <article class="flex flex-col gap-8 overflow-hidden rounded-lg border border-border bg-surface p-6 md:flex-row md:items-center md:p-10">
-      <img
-        src={@article.image}
-        alt={@article.alt}
-        class="h-56 w-full rounded-lg object-cover md:h-44 md:w-72"
-      />
-
-      <div class="flex-1">
-        <h3 class="text-2xl font-bold text-text">{@article.title}</h3>
-        <p class="mt-3 text-base leading-7 text-text-muted">{@article.detail}</p>
-      </div>
-
-      <a
-        href="#footer"
-        class="inline-flex items-center gap-2 self-start rounded-pill border border-border px-6 py-3 font-medium text-text transition hover:bg-surface-alt"
-      >
-        Read more <.icon name="hero-arrow-up-right" class="h-4 w-4" />
-      </a>
-    </article>
     """
   end
 
@@ -668,8 +543,6 @@ defmodule GymBroWeb.HomeComponents do
       %{label: "How it Works", href: "#how"},
       %{label: "Roles", href: "#roles"},
       %{label: "Features", href: "#features"},
-      %{label: "Pricing", href: "#pricing"},
-      %{label: "Blog", href: "#blog"},
       %{label: "Contact", href: "#footer"}
     ]
   end
@@ -837,75 +710,6 @@ defmodule GymBroWeb.HomeComponents do
     ]
   end
 
-  defp pricing_cards do
-    [
-      %{
-        title: "Athlete",
-        description: "Everything needed to start training with structure.",
-        price: "$0",
-        period: "/ month",
-        cta: "Get started",
-        href: ~p"/join/role",
-        highlight: false,
-        badge: nil,
-        features: [
-          "AI-generated starter plan",
-          "Workout and set logging",
-          "Body weight tracking",
-          "Daily training targets"
-        ]
-      },
-      %{
-        title: "Pro Athlete",
-        description: "Deeper visibility for athletes who want more insight.",
-        price: "$15",
-        period: "/ month",
-        cta: "Upgrade",
-        href: "#footer",
-        highlight: false,
-        badge: nil,
-        features: [
-          "Adaptive AI plan refreshes",
-          "Check-in photos and trends",
-          "Advanced progress analytics",
-          "Priority support"
-        ]
-      },
-      %{
-        title: "Coach",
-        description: "Built for trainers managing and coaching active clients.",
-        price: "$39",
-        period: "/ month",
-        cta: "Join as coach",
-        href: ~p"/join/role",
-        highlight: true,
-        badge: "Popular",
-        features: [
-          "Up to 25 clients",
-          "Invitation and linking flow",
-          "Exercise overrides",
-          "Live session monitoring"
-        ]
-      },
-      %{
-        title: "Team / Studio",
-        description: "For larger coaching operations and multi-trainer teams.",
-        price: "$99",
-        period: "/ month",
-        cta: "Contact sales",
-        href: "mailto:hello@gymbro.app",
-        highlight: false,
-        badge: nil,
-        features: [
-          "Unlimited clients",
-          "Multiple trainer seats",
-          "Cross-client analytics",
-          "Dedicated onboarding"
-        ]
-      }
-    ]
-  end
-
   defp why_items do
     [
       %{
@@ -934,29 +738,4 @@ defmodule GymBroWeb.HomeComponents do
     ]
   end
 
-  defp blog_articles do
-    [
-      %{
-        image: "https://images.unsplash.com/photo-1517344884509-a0c97ec11bcc?w=800&q=80",
-        alt: "How AI builds your training split",
-        title: "How AI Builds Your Perfect Training Split",
-        detail:
-          "A look under the hood at how GymBro turns your body stats, goals, and preferences into a structured program you can actually follow."
-      },
-      %{
-        image: "https://images.unsplash.com/photo-1538805060514-97d9cc17730c?w=800&q=80",
-        alt: "Logging habits that accelerate progress",
-        title: "5 Logging Habits That Accelerate Progress",
-        detail:
-          "Tracking sets, reps, weight, and rest time consistently is one of the fastest ways to break plateaus."
-      },
-      %{
-        image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=80",
-        alt: "Coaching clients remotely",
-        title: "Coaching Clients Remotely with GymBro",
-        detail:
-          "From inviting clients to monitoring live sessions and reviewing analytics, here's how coaches run a remote practice on GymBro."
-      }
-    ]
-  end
 end

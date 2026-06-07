@@ -3,37 +3,41 @@
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
+html {
+  scroll-padding-top: env(safe-area-inset-top);
+  scroll-behavior: smooth !important;
+}
 @layer base {
   :root {
     color-scheme: light;
 
     /* Surfaces */
-    --bg: #FAFAF7;
-    --surface: #FFFFFF;
-    --surface-alt: #F4F4F0;
-    --border: #E7E5E0;
-    --border-strong: #D6D3CC;
+    --bg: #fafaf7;
+    --surface: #ffffff;
+    --surface-alt: #f4f4f0;
+    --border: #e7e5e0;
+    --border-strong: #d6d3cc;
 
     /* Text */
-    --text: #18181B;
-    --text-muted: #5C5C66;
-    --text-subtle: #9A9AA3;
+    --text: #18181b;
+    --text-muted: #5c5c66;
+    --text-subtle: #9a9aa3;
 
     /* Accent (red) */
-    --accent: #E11D2A;
-    --accent-hover: #C8121E;
-    --accent-soft: #FDECEE;
+    --accent: #e11d2a;
+    --accent-hover: #c8121e;
+    --accent-soft: #fdecee;
     --accent-ring: rgba(225, 29, 42, 0.22);
 
     /* Semantic */
-    --success: #1F8A4C;
-    --success-soft: #E6F4EC;
-    --warning: #A86A00;
-    --warning-soft: #FBF1DC;
+    --success: #1f8a4c;
+    --success-soft: #e6f4ec;
+    --warning: #a86a00;
+    --warning-soft: #fbf1dc;
     --danger: var(--accent);
 
     /* Live indicator */
-    --live: #1F8A4C;
+    --live: #1f8a4c;
 
     /* Radius */
     --radius-sm: 8px;
@@ -56,8 +60,16 @@
     min-height: 100dvh;
     background: var(--bg);
     color: var(--text);
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-      "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      Roboto,
+      "Helvetica Neue",
+      Arial,
+      "Apple Color Emoji",
+      "Segoe UI Emoji";
     -webkit-font-smoothing: antialiased;
   }
 
@@ -308,8 +320,11 @@
     height: 40px;
     font-size: 14px;
     font-weight: 600;
-    transition: background-color 120ms ease, color 120ms ease,
-      border-color 120ms ease, transform 80ms ease;
+    transition:
+      background-color 120ms ease,
+      color 120ms ease,
+      border-color 120ms ease,
+      transform 80ms ease;
     cursor: pointer;
     white-space: nowrap;
     border: 1px solid transparent;
@@ -398,7 +413,9 @@
     color: var(--text);
     font-size: 15px;
     line-height: 22px;
-    transition: border-color 120ms ease, box-shadow 120ms ease;
+    transition:
+      border-color 120ms ease,
+      box-shadow 120ms ease;
   }
 
   .gb-input::placeholder {
