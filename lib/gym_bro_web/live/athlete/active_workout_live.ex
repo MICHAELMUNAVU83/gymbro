@@ -25,6 +25,7 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
          socket
          |> assign(:page_title, "Active Workout")
          |> assign(:rest_timer, nil)
+         |> assign(:rest_tick_ref, nil)
          |> assign(:trainer_message_toast, nil), layout: false}
 
       path ->
@@ -36,30 +37,17 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
   def handle_event("log_set", %{"exercise_id" => exercise_id, "exercise_log" => params}, socket) do
     session = socket.assigns.session
     exercise = find_exercise!(socket.assigns.session.workout_day.exercises, exercise_id)
+    normalized_params = normalize_log_params(params)
 
-    case Training.log_exercise_set(session, exercise, normalize_log_params(params)) do
-      {:ok, _log} ->
-        if is_integer(exercise.rest_seconds) and exercise.rest_seconds > 0 do
-          Training.broadcast_workout_event(session.id, :rest_timer_started, %{
-            exercise_id: exercise.id,
-            exercise_name: exercise.name,
-            owner_pid: self(),
-            remaining_seconds: exercise.rest_seconds,
-            total_seconds: exercise.rest_seconds
-          })
-        end
+    cond do
+      blank_param?(normalized_params, "reps_completed") ->
+        {:noreply, put_flash(socket, :error, "Add the reps you completed before logging the set.")}
 
-        {:noreply,
-         socket
-         |> assign_session_data(socket.assigns.current_user, session.id, exercise.id)
-         |> put_flash(:info, "#{exercise.name} set logged.")}
+      blank_param?(normalized_params, "weight_kg") ->
+        {:noreply, put_flash(socket, :error, "Add the weight you used before logging the set.")}
 
-      {:error, :exercise_not_in_session} ->
-        {:noreply, put_flash(socket, :error, "That exercise does not belong to this workout.")}
-
-      {:error, _changeset} ->
-        {:noreply,
-         put_flash(socket, :error, "We could not save that set. Check the values and try again.")}
+      true ->
+        do_log_set(socket, session, exercise, normalized_params)
     end
   end
 
@@ -97,9 +85,14 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
 
   @impl true
   def handle_info({:workout_event, :rest_timer_started, payload}, socket) do
-    if payload.owner_pid == self() do
-      Process.send_after(self(), {:rest_timer_tick, socket.assigns.session.id}, 1_000)
-    end
+    socket = cancel_rest_tick(socket)
+
+    socket =
+      if payload.owner_pid == self() do
+        schedule_rest_tick(socket)
+      else
+        socket
+      end
 
     {:noreply, assign(socket, :rest_timer, Map.delete(payload, :owner_pid))}
   end
@@ -111,13 +104,17 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
   def handle_info({:workout_event, :rest_timer_completed, _payload}, socket) do
     {:noreply,
      socket
+     |> cancel_rest_tick()
      |> push_event("workout:buzz", %{pattern: [180, 90, 180, 90, 260]})
      |> assign(:rest_timer, nil)
      |> put_flash(:info, "Rest timer complete.")}
   end
 
   def handle_info({:workout_event, :rest_timer_cleared, _payload}, socket) do
-    {:noreply, assign(socket, :rest_timer, nil)}
+    {:noreply,
+     socket
+     |> cancel_rest_tick()
+     |> assign(:rest_timer, nil)}
   end
 
   def handle_info({:workout_event, :elapsed_tick, payload}, socket) do
@@ -169,8 +166,7 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
           |> Map.put(:owner_pid, self())
 
         Training.broadcast_workout_event(session_id, :rest_timer_updated, next_payload)
-        Process.send_after(self(), {:rest_timer_tick, session_id}, 1_000)
-        {:noreply, socket}
+        {:noreply, schedule_rest_tick(socket)}
 
       %{remaining_seconds: 1} = rest_timer ->
         Training.broadcast_workout_event(session_id, :rest_timer_completed, %{
@@ -333,13 +329,18 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
                 <form id={"set-log-form-#{exercise.id}"} phx-submit="log_set" class="space-y-3">
                   <input type="hidden" name="exercise_id" value={exercise.id} />
 
-                  <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div
+                    id={"set-log-inputs-#{exercise.id}-#{next_set_number(@session.exercise_logs, exercise.id)}"}
+                    phx-update="ignore"
+                    class="grid grid-cols-1 gap-3 sm:grid-cols-2"
+                  >
                     <div>
                       <label class="type-label" for={"reps-#{exercise.id}"}>Reps</label>
                       <input
                         id={"reps-#{exercise.id}"}
                         type="number"
-                        min="0"
+                        min="1"
+                        required
                         name="exercise_log[reps_completed]"
                         class="gb-input gb-input--stat mt-2"
                       />
@@ -351,6 +352,7 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
                         type="number"
                         min="0"
                         step="0.5"
+                        required
                         name="exercise_log[weight_kg]"
                         value={default_weight(exercise)}
                         class="gb-input gb-input--stat mt-2"
@@ -386,6 +388,50 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
     """
   end
 
+  defp do_log_set(socket, session, exercise, params) do
+    case Training.log_exercise_set(session, exercise, params) do
+      {:ok, _log} ->
+        if is_integer(exercise.rest_seconds) and exercise.rest_seconds > 0 do
+          Training.broadcast_workout_event(session.id, :rest_timer_started, %{
+            exercise_id: exercise.id,
+            exercise_name: exercise.name,
+            owner_pid: self(),
+            remaining_seconds: exercise.rest_seconds,
+            total_seconds: exercise.rest_seconds
+          })
+        end
+
+        {:noreply,
+         socket
+         |> assign_session_data(socket.assigns.current_user, session.id, exercise.id)
+         |> put_flash(:info, "#{exercise.name} set logged.")}
+
+      {:error, :exercise_not_in_session} ->
+        {:noreply, put_flash(socket, :error, "That exercise does not belong to this workout.")}
+
+      {:error, _changeset} ->
+        {:noreply,
+         put_flash(socket, :error, "We could not save that set. Check the values and try again.")}
+    end
+  end
+
+  defp schedule_rest_tick(socket) do
+    socket = cancel_rest_tick(socket)
+    ref = Process.send_after(self(), {:rest_timer_tick, socket.assigns.session.id}, 1_000)
+    assign(socket, :rest_tick_ref, ref)
+  end
+
+  defp cancel_rest_tick(socket) do
+    case socket.assigns[:rest_tick_ref] do
+      nil ->
+        socket
+
+      ref ->
+        Process.cancel_timer(ref)
+        assign(socket, :rest_tick_ref, nil)
+    end
+  end
+
   defp assign_session_data(socket, current_user, session_id, preferred_active_exercise_id \\ nil) do
     session = Training.get_workout_session_for_user!(current_user.id, session_id)
 
@@ -403,9 +449,14 @@ defmodule GymBroWeb.Athlete.ActiveWorkoutLive do
 
   defp normalize_log_params(params) do
     params
-    |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
+    |> Enum.reject(fn {_key, value} -> blank_value?(value) end)
     |> Map.new()
   end
+
+  defp blank_param?(params, key), do: blank_value?(Map.get(params, key))
+
+  defp blank_value?(value) when is_binary(value), do: String.trim(value) == ""
+  defp blank_value?(value), do: is_nil(value)
 
   defp find_exercise!(exercises, exercise_id) do
     Enum.find(exercises, &(to_string(&1.id) == to_string(exercise_id))) ||
