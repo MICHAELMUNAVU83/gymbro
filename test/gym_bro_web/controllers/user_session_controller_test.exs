@@ -15,6 +15,7 @@ defmodule GymBroWeb.UserSessionControllerTest do
       response = html_response(conn, 200)
       assert response =~ "Log in"
       assert response =~ ~p"/users/register"
+      assert response =~ "You'll stay signed in on this device until you log out."
       assert response =~ "Forgot your password?"
     end
 
@@ -32,6 +33,7 @@ defmodule GymBroWeb.UserSessionControllerTest do
         })
 
       assert get_session(conn, :user_token)
+      assert conn.resp_cookies["_gym_bro_web_user_remember_me"]
       assert redirected_to(conn) == ~p"/"
 
       # Now do a logged in request and assert on the menu
@@ -39,13 +41,15 @@ defmodule GymBroWeb.UserSessionControllerTest do
       assert redirected_to(conn) == ~p"/onboarding/body-stats"
     end
 
-    test "logs the user in with remember me", %{conn: conn, user: user} do
+    test "logs the user in persistently even without a remember me checkbox", %{
+      conn: conn,
+      user: user
+    } do
       conn =
         post(conn, ~p"/users/log_in", %{
           "user" => %{
             "email" => user.email,
-            "password" => valid_user_password(),
-            "remember_me" => "true"
+            "password" => valid_user_password()
           }
         })
 

@@ -16,8 +16,8 @@
     <.input field={f[:email]} type="email" label="Email" required />
     <.input field={f[:password]} type="password" label="Password" required />
 
-    <:actions :let={f}>
-      <.input field={f[:remember_me]} type="checkbox" label="Keep me logged in" />
+    <:actions>
+      <p class="text-sm text-zinc-600">You'll stay signed in on this device until you log out.</p>
       <.link href={~p"/users/reset_password"} class="text-sm font-semibold">
         Forgot your password?
       </.link>
